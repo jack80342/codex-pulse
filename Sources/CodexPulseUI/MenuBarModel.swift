@@ -36,16 +36,30 @@ public final class MenuBarModel: ObservableObject {
     @Published public private(set) var isRefreshing = false
     @Published public private(set) var globalError: String?
     @Published public private(set) var lastCompletedAt: Date?
+    @Published public private(set) var automaticResults: [String: AutomaticRequestResult] = [:]
+    @Published public private(set) var isRunningAutomatic = false
+    @Published public private(set) var nextAutomaticCheckAt: Date?
     private var started = false
+    private var isSleeping = false
+    private var recoveryPending = false
+    private var timer: Timer?
     private let readAccounts: @Sendable () async throws -> [ManagedAccount]
     private let readStatuses: @Sendable () async throws -> [AccountStatus]
+    private let runAutomatic: (@Sendable ([AccountStatus]) async throws -> [AutomaticRequestResult])?
+    private let now: @Sendable () -> Date
+    private let timersEnabled: Bool
 
     public init(
         readAccounts: @escaping @Sendable () async throws -> [ManagedAccount],
-        readStatuses: @escaping @Sendable () async throws -> [AccountStatus]
+        readStatuses: @escaping @Sendable () async throws -> [AccountStatus],
+        runAutomatic: (@Sendable ([AccountStatus]) async throws -> [AutomaticRequestResult])? = nil,
+        now: @escaping @Sendable () -> Date = { Date() }, timersEnabled: Bool = false
     ) {
         self.readAccounts = readAccounts
         self.readStatuses = readStatuses
+        self.runAutomatic = runAutomatic
+        self.now = now
+        self.timersEnabled = timersEnabled
     }
 
     public static func live(store: AccountStore = AccountStore()) -> MenuBarModel {
@@ -58,7 +72,12 @@ public final class MenuBarModel: ObservableObject {
                     try AccountProfileClient().readUsername(paths: $0)
                 }).statuses()
             }.value
-        })
+        }, runAutomatic: { statuses in
+            try await Task.detached(priority: .utility) {
+                let executable = try CodexExecutable.resolve()
+                return await AutomaticRequestService(store: store, executable: executable).run(statuses: statuses)
+            }.value
+        }, timersEnabled: true)
     }
 
     public func startIfNeeded() async {
@@ -68,11 +87,21 @@ public final class MenuBarModel: ObservableObject {
     }
 
     public func refresh() async {
-        guard !isRefreshing else { return }
+        guard !isRefreshing, !isSleeping else { return }
         started = true
         isRefreshing = true
         globalError = nil
-        defer { isRefreshing = false }
+        timer?.invalidate()
+        timer = nil
+        defer {
+            isRunningAutomatic = false
+            isRefreshing = false
+            scheduleNextCheck()
+            if recoveryPending {
+                recoveryPending = false
+                Task { await self.refresh() }
+            }
+        }
         do {
             let accounts = try await readAccounts()
             let previous = Dictionary(uniqueKeysWithValues: rows.map { ($0.id, $0) })
@@ -82,6 +111,7 @@ public final class MenuBarModel: ObservableObject {
                 row.account = account
                 return row
             }
+            automaticResults = automaticResults.filter { key, _ in accounts.contains { $0.id == key } }
             if accounts.isEmpty { return }
             let statuses = try await readStatuses()
             let current = Dictionary(uniqueKeysWithValues: statuses.map { ($0.account.id, $0) })
@@ -107,11 +137,59 @@ public final class MenuBarModel: ObservableObject {
                 }
                 return row
             }
-            lastCompletedAt = Date()
+            if let runAutomatic, !isSleeping {
+                isRunningAutomatic = true
+                let results = try await runAutomatic(statuses)
+                automaticResults = Dictionary(uniqueKeysWithValues: results.map { ($0.accountID, $0) })
+                for index in rows.indices {
+                    guard let snapshot = automaticResults[rows[index].id]?.snapshot else { continue }
+                    let previous = rows[index].status
+                    let sameIdentity = previous?.snapshot?.identityDigest == snapshot.identityDigest
+                    if !sameIdentity { rows[index].lastUsername = nil }
+                    rows[index].status = AccountStatus(account: rows[index].account, state: "loggedIn", snapshot: snapshot,
+                        error: nil, username: sameIdentity ? previous?.username : nil, usernameError: previous?.usernameError)
+                    rows[index].lastSnapshot = snapshot
+                    rows[index].isStale = false
+                }
+            }
+            lastCompletedAt = now()
         } catch {
             globalError = Self.message(error)
             for index in rows.indices { rows[index].isStale = true }
+            automaticResults = Dictionary(uniqueKeysWithValues: rows.map {
+                ($0.id, AutomaticRequestResult(accountID: $0.id, message: "查询失败，自动请求暂停"))
+            })
         }
+    }
+
+    public func suspendForSleep() {
+        isSleeping = true
+        timer?.invalidate()
+        timer = nil
+        nextAutomaticCheckAt = nil
+    }
+
+    public func resumeAfterWake() async {
+        isSleeping = false
+        if isRefreshing { recoveryPending = true; return }
+        await refresh()
+    }
+
+    private func scheduleNextCheck() {
+        timer?.invalidate()
+        timer = nil
+        nextAutomaticCheckAt = nil
+        guard runAutomatic != nil, !isSleeping else { return }
+        let date = now()
+        guard let next = automaticResults.values.compactMap(\.nextRequestAt).filter({ $0 > date }).min() else { return }
+        nextAutomaticCheckAt = next
+        guard timersEnabled else { return }
+        let timer = Timer(timeInterval: max(1, next.timeIntervalSince(date)), repeats: false) { [weak self] _ in
+            Task { @MainActor in await self?.refresh() }
+        }
+        timer.tolerance = 1
+        RunLoop.main.add(timer, forMode: .common)
+        self.timer = timer
     }
 
     public var duplicateNames: [String] {

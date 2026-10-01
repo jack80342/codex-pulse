@@ -8,6 +8,7 @@ from pathlib import Path
 mode = sys.argv[1]
 reset = int(time.time()) + 18000
 requested = False
+quota_reads = 0
 home = Path(os.environ["CODEX_HOME"])
 login_modes = {"login-success", "login-failed", "login-timeout", "login-invalid-url", "login-wrong-event"}
 logged_in = mode not in login_modes and mode != "account-unlogged"
@@ -63,6 +64,7 @@ for line in sys.stdin:
                 marker.write_text("fixture-auth-only")
             send({"method": "account/login/completed", "params": {"loginId": "login-test", "success": logged_in}})
     elif method == "account/rateLimits/read":
+        quota_reads += 1
         if mode == "account-quota-error":
             send({"id": identifier, "error": {"code": 401, "message": "private-token-must-not-be-logged"}})
             continue
@@ -71,8 +73,20 @@ for line in sys.stdin:
             "primary": {"usedPercent": 10.5 if requested else 10, "windowDurationMins": 300, "resetsAt": reset},
             "secondary": {"usedPercent": 30, "windowDurationMins": 10080, "resetsAt": reset + 500000}
         }
+        quota_file = home / "fixture-quota.json"
+        quota = json.loads(quota_file.read_text()) if quota_file.exists() else {}
+        for key, config_key in [("primary", "five"), ("secondary", "weekly")]:
+            if config_key in quota:
+                if quota[config_key] is None:
+                    bucket.pop(key)
+                else:
+                    bucket[key]["usedPercent"] = quota[config_key]
+        if "reset" in quota and "primary" in bucket:
+            bucket["primary"]["resetsAt"] = quota["reset"]
         result = {"rateLimits": bucket, "rateLimitsByLimitId": {"codex": bucket}, "ordinaryUsageAllowed": mode != "quota-denied"}
-        result["accountId"] = "fixture-" + home.name
+        result["accountId"] = quota.get("identity", "fixture-" + home.name)
+        if quota_reads > 1 and "afterReadIdentity" in quota:
+            result["accountId"] = quota["afterReadIdentity"]
     elif method == "model/list":
         result = {"data": [{"model": "test-model", "isDefault": True, "supportedReasoningEfforts": [{"reasoningEffort": "low"}]}], "nextCursor": None}
     elif method == "thread/start":
@@ -82,6 +96,17 @@ for line in sys.stdin:
     elif method == "turn/start":
         requested = True
         assert request["params"]["serviceTierForTurn"] == "default"
+        quota_file = home / "fixture-quota.json"
+        if quota_file.exists():
+            quota = json.loads(quota_file.read_text())
+            if "afterReset" in quota:
+                quota["reset"] = quota["afterReset"]
+            if "afterWeekly" in quota:
+                quota["weekly"] = quota["afterWeekly"]
+            quota_file.write_text(json.dumps(quota))
+        if mode == "turn-timeout":
+            send({"id": identifier, "result": {"turn": {"id": "turn-test", "status": "inProgress"}}})
+            continue
         if mode == "tool-request":
             send({"id": "server-approval", "method": "item/commandExecution/requestApproval", "params": {}})
         if mode == "tool-item":

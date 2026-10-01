@@ -47,6 +47,26 @@ private actor RefreshGate {
     func finish(_ statuses: [AccountStatus]) { pending?.resume(returning: statuses); pending = nil }
 }
 
+private actor AutomaticGate {
+    var calls = 0
+    private var pending: CheckedContinuation<[AutomaticRequestResult], Never>?
+    private var started: CheckedContinuation<Void, Never>?
+
+    func run() async -> [AutomaticRequestResult] {
+        calls += 1
+        return await withCheckedContinuation { continuation in
+            pending = continuation
+            started?.resume()
+            started = nil
+        }
+    }
+    func waitUntilStarted() async {
+        if pending != nil { return }
+        await withCheckedContinuation { started = $0 }
+    }
+    func finish(_ results: [AutomaticRequestResult]) { pending?.resume(returning: results); pending = nil }
+}
+
 @MainActor
 struct MenuBarModelTests {
     private func status(_ id: String, used: Double? = 40, identity: String? = nil, username: String? = nil) throws -> AccountStatus {
@@ -59,6 +79,73 @@ struct MenuBarModelTests {
 
     private func model(_ loader: FixtureLoader) -> MenuBarModel {
         MenuBarModel(readAccounts: { await loader.list() }, readStatuses: { try await loader.fetch() })
+    }
+
+    @Test
+    func automaticResultsUpdateQuotaAndScheduleEarliestServerReset() async throws {
+        let first = try status("a", username: "profile-a")
+        let loader = FixtureLoader([first, try status("b"), try status("free", used: nil)])
+        let date = Date(timeIntervalSince1970: 1_800_000_000)
+        let after = try status("a", used: 41).snapshot
+        let model = MenuBarModel(readAccounts: { await loader.list() }, readStatuses: { try await loader.fetch() },
+            runAutomatic: { _ in [
+                AutomaticRequestResult(accountID: "a", message: "完成", nextRequestAt: date.addingTimeInterval(120), snapshot: after),
+                AutomaticRequestResult(accountID: "b", message: "等待", nextRequestAt: date.addingTimeInterval(30)),
+                AutomaticRequestResult(accountID: "free", message: "未知，暂停")
+            ] }, now: { date })
+        await model.startIfNeeded()
+        #expect(model.nextAutomaticCheckAt == date.addingTimeInterval(30))
+        #expect(model.rows[0].bucket?.window(minutes: 300)?.usedPercent == 41)
+        #expect(model.rows[0].displayName == "profile-a")
+        #expect(!model.isRefreshing && !model.isRunningAutomatic)
+        #expect(model.automaticResults["free"]?.nextRequestAt == nil)
+        await model.startIfNeeded()
+        #expect(await loader.calls == 1)
+    }
+
+    @Test
+    func sleepingCancelsScheduleAndWakeRequeriesBeforeResuming() async throws {
+        let loader = FixtureLoader([try status("a")])
+        let date = Date(timeIntervalSince1970: 1_800_000_000)
+        let model = MenuBarModel(readAccounts: { await loader.list() }, readStatuses: { try await loader.fetch() },
+            runAutomatic: { _ in [AutomaticRequestResult(accountID: "a", message: "等待", nextRequestAt: date.addingTimeInterval(120))] },
+            now: { date })
+        await model.refresh()
+        #expect(model.nextAutomaticCheckAt != nil)
+        model.suspendForSleep()
+        #expect(model.nextAutomaticCheckAt == nil)
+        await model.refresh()
+        #expect(await loader.calls == 1)
+        await model.resumeAfterWake()
+        #expect(await loader.calls == 2)
+        #expect(model.nextAutomaticCheckAt == date.addingTimeInterval(120))
+        await loader.failNext()
+        await model.refresh()
+        #expect(model.nextAutomaticCheckAt == nil)
+        #expect(model.automaticResults["a"]?.message.contains("暂停") == true)
+    }
+
+    @Test
+    func wakeDuringAutomaticRequestQueuesOneRecoveryAndNeverOverlaps() async throws {
+        let account = try status("a")
+        let loader = FixtureLoader([account])
+        let gate = AutomaticGate()
+        let model = MenuBarModel(readAccounts: { await loader.list() }, readStatuses: { try await loader.fetch() },
+                                runAutomatic: { _ in await gate.run() })
+        let first = Task { await model.refresh() }
+        await gate.waitUntilStarted()
+        #expect(model.isRefreshing && model.isRunningAutomatic)
+        await model.refresh()
+        #expect(await gate.calls == 1)
+        model.suspendForSleep()
+        await model.resumeAfterWake()
+        await model.resumeAfterWake()
+        await gate.finish([])
+        await first.value
+        await gate.waitUntilStarted()
+        #expect(await gate.calls == 2)
+        #expect(await loader.calls == 2)
+        await gate.finish([])
     }
 
     @Test

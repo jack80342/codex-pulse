@@ -130,12 +130,13 @@ public final class ProbeSession {
 
     public func runProbe(
         account: String, limitID: String, model requestedModel: String?, workspace: URL,
-        reportURL: URL, previousURL: URL? = nil, turnTimeout: TimeInterval = 90
+        reportURL: URL, previousURL: URL? = nil, turnTimeout: TimeInterval = 90, expectedIdentity: String? = nil
     ) throws -> ProbeReport {
         guard turnTimeout.isFinite, turnTimeout > 0 else {
             throw ProbeError.invalidArgument("模型执行超时必须是正数。")
         }
         let before = try readQuota()
+        if let expectedIdentity, before.identityDigest != expectedIdentity { throw ProbeError.invalidResponse }
         var modelName = requestedModel
         if let previousURL {
             let previous = try ProbeReport.load(from: previousURL)

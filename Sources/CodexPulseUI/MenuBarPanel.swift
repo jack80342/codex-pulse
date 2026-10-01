@@ -14,7 +14,7 @@ public struct MenuBarPanel: View {
                     .font(.title2).foregroundStyle(.tint)
                 VStack(alignment: .leading, spacing: 3) {
                     Text("Codex Pulse").font(.headline)
-                    Text(model.isRefreshing ? "正在读取账号额度…" : "\(model.rows.count) 个账号")
+                    Text(model.isRunningAutomatic ? "正在检查自动请求…" : (model.isRefreshing ? "正在读取账号额度…" : "\(model.rows.count) 个账号"))
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
@@ -30,7 +30,10 @@ public struct MenuBarPanel: View {
             } else {
                 ScrollView {
                     VStack(spacing: 10) {
-                        ForEach(model.rows) { row in AccountCard(row: row, refreshing: model.isRefreshing) }
+                        ForEach(model.rows) { row in
+                            AccountCard(row: row, refreshing: model.isRefreshing,
+                                        automatic: model.automaticResults[row.id], runningAutomatic: model.isRunningAutomatic)
+                        }
                     }
                 }
                 .frame(maxHeight: 580)
@@ -65,6 +68,8 @@ public struct MenuBarPanel: View {
 private struct AccountCard: View {
     let row: MenuAccountRow
     let refreshing: Bool
+    let automatic: AutomaticRequestResult?
+    let runningAutomatic: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -96,6 +101,16 @@ private struct AccountCard: View {
             if row.isStale, let date = row.snapshot?.capturedAt {
                 Text("上次成功更新 \(date.formatted(date: .abbreviated, time: .standard))")
                     .font(.caption2).foregroundStyle(.secondary)
+            }
+            if runningAutomatic {
+                Text("正在检查自动请求…").font(.caption2).foregroundStyle(.secondary)
+            } else if let automatic {
+                Text(automatic.message).font(.caption2).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let next = automatic.nextRequestAt {
+                    Text("下次自动请求 \(next.formatted(date: .abbreviated, time: .shortened))")
+                        .font(.caption2).foregroundStyle(.secondary)
+                }
             }
         }
         .padding(12)
