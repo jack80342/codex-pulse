@@ -1,0 +1,30 @@
+# macOS
+.DS_Store
+._*
+
+# Xcode and Swift build output
+.build/
+.swiftpm/
+DerivedData/
+build/
+*.xcuserstate
+xcuserdata/
+*.xccheckout
+*.xcscmblueprint
+
+# Local credentials and account data
+.env
+.env.*
+!.env.example
+.codex/
+auth.json
+accounts/
+*.p12
+*.pfx
+*.mobileprovision
+*.provisionprofile
+
+# Runtime and temporary files
+*.log
+*.tmp
+*.swp
