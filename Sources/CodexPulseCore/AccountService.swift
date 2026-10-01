@@ -5,22 +5,38 @@ public struct AccountStatus: Sendable {
     public let state: String
     public let snapshot: QuotaSnapshot?
     public let error: String?
+    public let username: String?
+    public let usernameError: String?
+
+    public init(account: ManagedAccount, state: String, snapshot: QuotaSnapshot?, error: String?,
+                username: String? = nil, usernameError: String? = nil) {
+        self.account = account
+        self.state = state
+        self.snapshot = snapshot
+        self.error = error
+        self.username = username
+        self.usernameError = usernameError
+    }
 }
 
 public struct AccountService: Sendable {
     public let store: AccountStore
     private let makeClient: @Sendable (ProbePaths) throws -> AppServerClient
+    private let readUsername: (@Sendable (ProbePaths) throws -> String)?
 
-    public init(store: AccountStore, executable: URL, timeout: TimeInterval = 15) {
-        self.init(store: store) { paths in
+    public init(store: AccountStore, executable: URL, timeout: TimeInterval = 15,
+                readUsername: (@Sendable (ProbePaths) throws -> String)? = nil) {
+        self.init(store: store, readUsername: readUsername, makeClient: { paths in
             try AppServerClient(executable: executable, arguments: ProbePaths.serverArguments,
                                 codexHome: paths.accountHome, workspace: paths.workspace, timeout: timeout)
-        }
+        })
     }
 
-    public init(store: AccountStore, makeClient: @escaping @Sendable (ProbePaths) throws -> AppServerClient) {
+    public init(store: AccountStore, readUsername: (@Sendable (ProbePaths) throws -> String)? = nil,
+                makeClient: @escaping @Sendable (ProbePaths) throws -> AppServerClient) {
         self.store = store
         self.makeClient = makeClient
+        self.readUsername = readUsername
     }
 
     public func login(id: String, openURL: (URL) throws -> Void) throws {
@@ -43,12 +59,18 @@ public struct AccountService: Sendable {
                     return AccountStatus(account: current, state: "notLoggedIn", snapshot: nil, error: nil)
                 }
                 guard info["type"] as? String == "chatgpt" else { throw ProbeError.unsupportedAccount }
-                do {
-                    let snapshot = try session.readQuota()
-                    return AccountStatus(account: current, state: "loggedIn", snapshot: snapshot, error: nil)
-                } catch {
-                    return AccountStatus(account: current, state: "quotaError", snapshot: nil, error: message(error))
+                var snapshot: QuotaSnapshot?
+                var quotaError: String?
+                do { snapshot = try session.readQuota() }
+                catch { quotaError = message(error) }
+                var username: String?
+                var usernameError: String?
+                if let readUsername {
+                    do { username = try readUsername(paths) }
+                    catch { usernameError = (error as? ProfileError)?.description ?? ProfileError.transport.description }
                 }
+                return AccountStatus(account: current, state: snapshot == nil ? "quotaError" : "loggedIn",
+                                     snapshot: snapshot, error: quotaError, username: username, usernameError: usernameError)
             }
         } catch {
             return AccountStatus(account: account, state: account.pendingDeletion ? "pendingDeletion" : "error",
@@ -71,6 +93,17 @@ public struct AccountService: Sendable {
             for await result in group { results.append(result) }
             return results.sorted { $0.0 < $1.0 }.map(\.1)
         }
+    }
+
+    public static func duplicateAccounts(in statuses: [AccountStatus]) -> [(ManagedAccount, ManagedAccount)] {
+        var seen: [String: ManagedAccount] = [:]
+        var pairs: [(ManagedAccount, ManagedAccount)] = []
+        for status in statuses {
+            guard let digest = status.snapshot?.identityDigest else { continue }
+            if let first = seen[digest] { pairs.append((first, status.account)) }
+            else { seen[digest] = status.account }
+        }
+        return pairs
     }
 
     private func message(_ error: Error) -> String {

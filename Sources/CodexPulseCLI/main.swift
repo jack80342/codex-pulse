@@ -96,12 +96,8 @@ do {
     case "login", "status":
         let timeout = Double(options["--timeout"] ?? "15") ?? 0
         guard timeout.isFinite, timeout > 0, timeout <= 300 else { throw ProbeError.invalidArgument("协议超时须在 0～300 秒之间。") }
-        let executable = options["--codex"] ?? ["/opt/homebrew/bin/codex", "/usr/local/bin/codex"]
-            .first(where: FileManager.default.isExecutableFile(atPath:)) ?? ""
-        guard executable.hasPrefix("/"), FileManager.default.isExecutableFile(atPath: executable) else {
-            throw ProbeError.invalidArgument("未找到 Codex CLI，请用 --codex 指定绝对路径。")
-        }
-        let service = AccountService(store: store, executable: URL(fileURLWithPath: executable), timeout: timeout)
+        let executable = try CodexExecutable.resolve(path: options["--codex"])
+        let service = AccountService(store: store, executable: executable, timeout: timeout)
         let statuses: [AccountStatus]
         if command == "login" {
             let id = options["--id"] ?? ""
@@ -118,17 +114,11 @@ do {
         }
         if statuses.isEmpty { emit("尚无账号，请先执行 accounts add --name <别名>。") }
         for status in statuses { show(status) }
-        var seen: [String: String] = [:]
-        var duplicated = false
-        for status in statuses {
-            if let digest = status.snapshot?.identityDigest {
-                if let name = seen[digest] {
-                    emit("提示：\(name) 与 \(status.account.name) 登录了同一个服务端账号，额度共享；请检查浏览器账号。")
-                    duplicated = true
-                } else { seen[digest] = status.account.name }
-            }
+        let duplicates = AccountService.duplicateAccounts(in: statuses)
+        for (first, second) in duplicates {
+            emit("提示：\(first.name) 与 \(second.name) 登录了同一个服务端账号，额度共享；请检查浏览器账号。")
         }
-        if duplicated || statuses.contains(where: { $0.error != nil }) { exit(1) }
+        if !duplicates.isEmpty || statuses.contains(where: { $0.error != nil }) { exit(1) }
     default: break
     }
 } catch {

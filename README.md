@@ -6,7 +6,7 @@ Codex 多账号额度管理工具，计划支持 macOS 桌面小组件、额度�
 
 ## 当前状态
 
-已实现协议验证程序和第二阶段的三账号管理命令行工具，支持独立登录、本地账号列表、别名修改、删除及并发额度查询。尚未创建 Xcode 工程或实现菜单栏、桌面小组件、长期自动请求和 iOS 功能。
+已实现协议验证、三账号管理命令行工具和第三阶段的原生菜单栏应用。菜单栏支持账号列表、五小时/周额度、服务端重置时间、手动刷新和错误状态。桌面小组件、长期自动请求和 iOS 功能仍待实现。账号标题动态显示资料接口返回的真实用户名，刷新时同步更新。
 
 第一阶段协议验证已完成：独立 Plus 账号登录、真实额度读取和一次最小请求均成功。官方已明确新五小时窗口由上一窗口结束后的首条消息启动，无需等待额外窗口实验；原定重置后验证任务已取消。详细观测见 [第一阶段验证说明](docs/phase-1-verification.md)。当前没有配置 GitHub 远程仓库。
 
@@ -34,6 +34,18 @@ swift run codex-pulse-probe verify-reset --report "<首次报告的绝对路径>
 ```
 
 重置后验证沿用原报告模型并核对账号身份。未到重置时间、额度许可未知或已耗尽时停止，不发送模型请求。更多步骤和判定边界见 [第一阶段验证说明](docs/phase-1-verification.md)。
+
+## 菜单栏应用
+
+```bash
+cd /Users/j/github_repo/codex-pulse
+./scripts/build-app.sh
+open ".build/app/Codex Pulse.app"
+```
+
+应用启动时读取三个账号，点击菜单栏心电图图标查看结果，“立即刷新”重新并发查询。查询失败保留上次成功额度并以灰色及更新时间标记；服务端没有返回的窗口显示“未知”。本阶段只查询额度，自动模型请求在第五阶段实现。账号增删、登录和别名修改继续使用下面的命令行入口。用户名从经用户授权的只读内部资料接口获取；资料失败时保留最近名称并显示错误，额度查询独立处理。
+
+本机使用 Command Line Tools 构建 SwiftUI 应用，生成本地 ad-hoc 签名的 `.app`。详细验证及用户名接口限制见 [第三阶段说明](docs/phase-3-menu-bar.md)。
 
 ## 三账号管理
 
@@ -66,7 +78,7 @@ swift run codex-pulse accounts remove --id "<ID>"
 
 1. 验证 Codex app-server 初始化、额度读取及最小模型请求完整执行（已完成）。
 2. 实现三个账号的独立登录和账号管理（已完成，两 Plus 加一 Free，均已真实登录和并发查询）。
-3. 实现菜单栏额度展示、手动刷新及错误状态。
+3. 实现菜单栏额度展示、手动刷新及错误状态（已实现；包含动态资料用户名）。
 4. 实现共享快照和 macOS 桌面小组件。
 5. 实现自动请求调度、后台运行、唤醒恢复和打包。
 6. 完成三账号联调、异常处理及与日常 Codex App 并行使用验证。
@@ -99,13 +111,19 @@ codex-pulse/
 ├── Sources/
 │   ├── CodexPulseCore/
 │   ├── CodexPulseProbe/
-│   └── CodexPulseCLI/
+│   ├── CodexPulseCLI/
+│   ├── CodexPulseUI/
+│   └── CodexPulseApp/
 ├── Tests/
-│   └── CodexPulseCoreTests/
+│   ├── CodexPulseCoreTests/
+│   └── CodexPulseUITests/
 ├── docs/
 │   ├── design-plan.md
 │   ├── phase-1-verification.md
-│   └── phase-2-account-management.md
+│   ├── phase-2-account-management.md
+│   └── phase-3-menu-bar.md
+├── Resources/Info.plist
+├── scripts/build-app.sh
 ├── scripts/test.sh
 ├── .gitignore
 ├── .gitattributes

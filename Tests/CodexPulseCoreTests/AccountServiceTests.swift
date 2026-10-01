@@ -4,15 +4,33 @@ import Testing
 
 @Suite(.serialized)
 struct AccountServiceTests {
-    private func service(root: URL, modes: [String: String]) throws -> AccountService {
+    private func service(root: URL, modes: [String: String],
+                         readUsername: (@Sendable (ProbePaths) throws -> String)? = nil) throws -> AccountService {
         let python = try #require(["/usr/bin/python3", "/opt/homebrew/bin/python3"].first(where: FileManager.default.isExecutableFile(atPath:)))
         let fixture = try #require(Bundle.module.url(forResource: "app-server", withExtension: "py", subdirectory: "Fixtures"))
-        return AccountService(store: AccountStore(root: root)) { paths in
+        return AccountService(store: AccountStore(root: root), readUsername: readUsername) { paths in
             let mode = modes[paths.accountHome.lastPathComponent] ?? "normal"
             return try AppServerClient(executable: URL(fileURLWithPath: python),
                                 arguments: [fixture.path, mode],
                                 codexHome: paths.accountHome, workspace: paths.workspace, timeout: mode == "timeout" ? 0.1 : 2)
         }
+    }
+
+    @Test
+    func testProfileQueriesUseIndependentHomesAndFailureDoesNotLoseQuota() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("CodexPulseProfile-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let service = try service(root: root, modes: [:], readUsername: { paths in
+            let id = paths.accountHome.lastPathComponent
+            if id == "b" { throw ProfileError.http(401) }
+            return "profile-\(id)"
+        })
+        for id in ["a", "b", "c"] { try service.store.add(name: id, id: id) }
+        let results = try await service.statuses()
+        #expect(results.map(\.username) == ["profile-a", nil, "profile-c"])
+        #expect(results.map(\.state) == ["loggedIn", "loggedIn", "loggedIn"])
+        #expect(results.allSatisfy { $0.snapshot != nil && $0.error == nil })
+        #expect(results[1].usernameError?.contains("401") == true)
     }
 
     @Test

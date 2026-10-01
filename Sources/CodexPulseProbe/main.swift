@@ -59,11 +59,7 @@ do {
           turnTimeout.isFinite, turnTimeout > 0, turnTimeout <= 600 else {
         throw ProbeError.invalidArgument("协议超时须在 0～300 秒之间，模型超时须在 0～600 秒之间。")
     }
-    let executablePath = options["--codex"] ?? ["/opt/homebrew/bin/codex", "/usr/local/bin/codex"]
-        .first(where: FileManager.default.isExecutableFile(atPath:)) ?? ""
-    guard executablePath.hasPrefix("/"), FileManager.default.isExecutableFile(atPath: executablePath) else {
-        throw ProbeError.invalidArgument("未找到 Codex CLI，请用 --codex 指定绝对路径。")
-    }
+    let executable = try CodexExecutable.resolve(path: options["--codex"])
     let previousURL: URL?
     if command == "verify-reset" {
         guard let path = options["--report"], path.hasPrefix("/") else {
@@ -79,7 +75,7 @@ do {
     defer { withExtendedLifetime(lease) {} }
     try paths.prepare()
     let client = try AppServerClient(
-        executable: URL(fileURLWithPath: executablePath), arguments: ProbePaths.serverArguments,
+        executable: executable, arguments: ProbePaths.serverArguments,
         codexHome: paths.accountHome, workspace: paths.workspace, timeout: timeout
     )
     defer { client.close() }

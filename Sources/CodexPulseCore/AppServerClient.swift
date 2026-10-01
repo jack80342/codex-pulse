@@ -3,6 +3,7 @@ import Darwin
 
 public enum ProbeError: Error, CustomStringConvertible {
     case invalidArgument(String)
+    case codexNotInstalled
     case notLoggedIn
     case loginFailed
     case unsupportedAccount
@@ -19,6 +20,7 @@ public enum ProbeError: Error, CustomStringConvertible {
     public var description: String {
         switch self {
         case .invalidArgument(let message): message
+        case .codexNotInstalled: "未找到 Codex CLI，请用 --codex 指定绝对路径。"
         case .notLoggedIn: "独立验证账号尚未登录，请先执行 login。"
         case .loginFailed: "浏览器认证流程未成功，请重新执行 login 并完成登录。"
         case .unsupportedAccount: "验证只支持独立登录的 ChatGPT 账号。"

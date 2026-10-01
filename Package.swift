@@ -7,16 +7,20 @@ let package = Package(
     products: [
         .library(name: "CodexPulseCore", targets: ["CodexPulseCore"]),
         .executable(name: "codex-pulse-probe", targets: ["CodexPulseProbe"]),
-        .executable(name: "codex-pulse", targets: ["CodexPulseCLI"])
+        .executable(name: "codex-pulse", targets: ["CodexPulseCLI"]),
+        .executable(name: "CodexPulseApp", targets: ["CodexPulseApp"])
     ],
     targets: [
         .target(name: "CodexPulseCore"),
+        .target(name: "CodexPulseUI", dependencies: ["CodexPulseCore"]),
+        .executableTarget(name: "CodexPulseApp", dependencies: ["CodexPulseUI"]),
         .executableTarget(name: "CodexPulseProbe", dependencies: ["CodexPulseCore"]),
         .executableTarget(name: "CodexPulseCLI", dependencies: ["CodexPulseCore"]),
         .testTarget(
             name: "CodexPulseCoreTests",
             dependencies: ["CodexPulseCore"],
             resources: [.copy("Fixtures")]
-        )
+        ),
+        .testTarget(name: "CodexPulseUITests", dependencies: ["CodexPulseUI", "CodexPulseCore"])
     ]
 )

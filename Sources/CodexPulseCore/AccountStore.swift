@@ -24,6 +24,13 @@ public struct ManagedAccount: Codable, Equatable, Sendable {
     public var name: String
     public let createdAt: Date
     public var pendingDeletion: Bool
+
+    public init(id: String, name: String, createdAt: Date = Date(), pendingDeletion: Bool = false) {
+        self.id = id
+        self.name = name
+        self.createdAt = createdAt
+        self.pendingDeletion = pendingDeletion
+    }
 }
 
 private struct AccountRegistry: Codable {
