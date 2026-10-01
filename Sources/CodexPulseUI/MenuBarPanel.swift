@@ -93,8 +93,8 @@ private struct AccountCard: View {
             if let error = row.status?.usernameError {
                 Text(error).font(.caption2).foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true)
             }
-            if let date = row.snapshot?.capturedAt {
-                Text("\(row.isStale ? "上次成功读取" : "额度更新") \(date.formatted(date: .abbreviated, time: .standard))")
+            if row.isStale, let date = row.snapshot?.capturedAt {
+                Text("上次成功更新 \(date.formatted(date: .abbreviated, time: .standard))")
                     .font(.caption2).foregroundStyle(.secondary)
             }
         }
