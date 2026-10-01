@@ -1,17 +1,16 @@
-# Codex Pulse（codex-pulse）多账号额度桌面小组件推荐方案
+# Codex Pulse（codex-pulse）多账号额度菜单栏应用方案
 
 更新时间：2026-10-01
 
 - Git 仓库名：`codex-pulse`
 - 应用显示名称：`Codex Pulse`
 - Swift 工程及主应用名称：`CodexPulse`
-- 桌面小组件名称：`CodexPulseWidget`
 - 本地仓库目录：`/Users/j/github_repo/codex-pulse`
 - 仓库内方案文档：`docs/design-plan.md`
 
 ## 1. 项目目标
 
-开发一个 macOS 原生桌面小组件，集中展示 3 个 Codex 账号的：
+开发一个 macOS 原生菜单栏应用，集中展示 3 个 Codex 账号的：
 
 - 账号名称及套餐类型
 - 当前额度已使用百分比
@@ -41,7 +40,7 @@
 - 最小模型请求本身会消耗额度；该功能目标是尽早启动可用窗口，不承诺增加额度或累积未使用窗口。
 - 模型请求使用各账号独立的 ChatGPT 登录状态，在专用空工作目录和独立会话中执行，不读取用户项目、不执行命令、不修改文件。
 - 一个账号的查询失败、请求失败或认证失效不得影响另外两个账号；周额度缺失或查询异常时，不得推断为仍有额度并继续发送模型请求。
-- 定时请求由 macOS 主应用负责，需应用后台运行、电脑处于唤醒状态且网络可用；Widget 和 iOS 端只展示状态。
+- 定时请求由 macOS 主应用负责，需应用后台运行、电脑处于唤醒状态且网络可用；iOS 端只展示状态。
 
 参考：[Codex App Server 额度接口](https://learn.chatgpt.com/docs/app-server)、[套餐额度说明](https://learn.chatgpt.com/docs/pricing)、[官方五小时窗口规则](https://help.openai.com/en/articles/20001516-managing-usage-with-gpt-6-astra-in-work-and-codex)。
 
@@ -72,36 +71,25 @@ account/rateLimits/read
 
 ## 3. 推荐产品形态
 
-采用“菜单栏常驻应用 + WidgetKit 桌面小组件”的组合，而不是只开发一个 Widget。
+采用菜单栏常驻应用，集中管理三个账号、查询和展示额度，并承担后续自动请求调度。
 
 ```text
-CodexPulse 主应用
-  ├── 管理三个账号
-  ├── 完成账号登录
-  ├── 调用 codex app-server
-  ├── 定时读取额度
-  ├── 保存非敏感额度快照
-  └── 通知 WidgetKit 刷新
-                    ↓
-               App Group
-                    ↓
-CodexPulseWidget
-  ├── 读取额度快照
-  ├── 展示三个账号
-  └── 不管理登录、不接触认证凭据
+CodexPulse 菜单栏应用
+  ├── 管理三个账号及独立登录
+  ├── 调用 codex app-server 查询额度
+  ├── 动态读取资料用户名
+  ├── 展示额度、重置时间和异常状态
+  └── 后续实现自动请求调度与唤醒恢复
 ```
 
-主应用负责认证、进程和网络；Widget 只负责显示。这样符合 WidgetKit 的生命周期和刷新限制，也更容易处理登录失效及协议错误。
+认证、进程、网络和展示由同一个菜单栏应用负责。
 
 ## 4. 技术选型
 
 - Swift 6
 - SwiftUI
-- WidgetKit
-- App Groups
 - `Process`、`Pipe`：运行 Codex app-server 并进行 JSONL 通信
 - `Codable`：解析协议响应
-- `WidgetCenter`：触发 Widget 刷新
 - `SMAppService`：可选的登录时启动
 - Unified Logging：记录不含凭据的运行状态
 
@@ -140,7 +128,7 @@ CODEX_HOME="<账号目录>" /opt/homebrew/bin/codex app-server
 
 ### 5.2 不影响正式 Codex App 的强制约束
 
-小组件不得执行以下操作：
+菜单栏应用不得执行以下操作：
 
 - 不得把 `CODEX_HOME` 指向 `~/.codex`
 - 不得读取、复制、写入或删除 `~/.codex/auth.json`
@@ -150,7 +138,7 @@ CODEX_HOME="<账号目录>" /opt/homebrew/bin/codex app-server
 - 不得执行 `killall codex`、`killall ChatGPT` 等全局结束命令
 - 不得结束非本应用创建的进程
 
-即使小组件中的账号与 Codex App 当前账号相同，也应在小组件的独立目录内重新登录一次，不能直接复制官方 App 的认证文件。
+即使本工具中的账号与 Codex App 当前账号相同，也应在本工具的独立目录内重新登录一次，不能直接复制官方 App 的认证文件。
 
 目录关系如下：
 
@@ -158,13 +146,13 @@ CODEX_HOME="<账号目录>" /opt/homebrew/bin/codex app-server
 日常使用的 Codex App
 └── ~/.codex
 
-额度小组件
+Codex Pulse 菜单栏应用
 ├── Application Support/CodexPulse/accounts/account-1
 ├── Application Support/CodexPulse/accounts/account-2
 └── Application Support/CodexPulse/accounts/account-3
 ```
 
-这样即使小组件崩溃、协议变化或登录过期，也不会破坏日常工作的 Codex App。
+这样即使菜单栏应用崩溃、协议变化或登录过期，也不会破坏日常工作的 Codex App。
 
 ## 6. 账号添加与登录流程
 
@@ -277,7 +265,7 @@ rateLimits
 ### 8.1 5 小时额度展示规则
 
 - 同一账号的 5 小时额度和周额度分别显示，不能用其中一个覆盖另一个。
-- 若任一额度窗口的剩余百分比低于阈值，菜单栏和 Widget 均提示该窗口名称及重置时间。
+- 若任一额度窗口的剩余百分比低于阈值，菜单栏提示该窗口名称及重置时间。
 - 接近或经过 5 小时窗口重置时间时，触发一次完整的 `account/rateLimits/read`；周额度及其它额度桶均以该次服务端返回值更新。
 - `account/rateLimits/updated` 通知只可能包含部分字段；收到通知后合并到最近一次完整快照，或直接重新调用 `account/rateLimits/read`，不得将未返回窗口清空。
 
@@ -292,20 +280,6 @@ rateLimits
 - 协议兼容状态
 
 目录权限应限制为当前用户访问。
-
-### App Group
-
-只保存 Widget 展示需要的非敏感快照：
-
-- 账号 ID 和别名
-- 可选的脱敏邮箱
-- 套餐类型
-- 各额度桶、额度窗口、使用百分比及重置时间
-- Credits 余额
-- 最后更新时间
-- 错误状态
-
-禁止将访问令牌、刷新令牌、Cookie 或完整认证文件写入 App Group。
 
 ### 日志
 
@@ -329,15 +303,6 @@ rateLimits
 - 网络恢复后刷新
 - 接近重置时间时安排一次刷新
 
-Widget：
-
-- 读取 App Group 中的最新快照
-- 使用约 30 分钟的 Timeline 更新周期
-- 主应用数据变化时调用 `WidgetCenter.shared.reloadTimelines`
-- 使用 `Text(resetDate, style: .relative)` 展示动态倒计时
-
-如果数据超过 45 分钟未更新，Widget 显示“数据可能已过期”，而不是继续把旧数据当成当前结果。
-
 ## 11. 界面设计
 
 ### 菜单栏应用
@@ -354,21 +319,6 @@ Codex Pulse
 └── 退出
 ```
 
-### Widget
-
-优先支持 `systemMedium` 和 `systemLarge`：
-
-```text
-主账号       Plus        剩余 50%
-██████████░░░░░░░░░░
-5小时额度 · 2小时后重置
-7天额度 · 8月25日 23:06重置
-
-工作账号     Plus        剩余 82%
-████████████████░░░░
-5小时额度 · 2小时后重置
-```
-
 颜色建议：
 
 - 剩余大于 50%：绿色
@@ -376,7 +326,7 @@ Codex Pulse
 - 剩余小于 20%：红色
 - 数据过期或查询异常：灰色
 
-提供“隐藏邮箱”选项，默认在桌面只显示账号别名。
+菜单栏默认展示资料接口动态读取的用户名，不展示完整邮箱。
 
 ## 12. 异常处理
 
@@ -415,7 +365,7 @@ CodexProtocolAdapter
 └── decodeNotifications()
 ```
 
-业务层和 Widget 不直接依赖 app-server 原始 JSON。
+业务层和界面不直接依赖 app-server 原始 JSON。
 
 启动时执行：
 
@@ -447,13 +397,13 @@ codex --version
 - 使用独立测试 `CODEX_HOME` 登录
 - 连续查询三个账号
 - 查询期间正常使用 Codex App
-- 关闭小组件后确认无遗留 app-server 进程
+- 退出菜单栏应用后确认无遗留 app-server 进程
 - 更新 Codex CLI 后执行兼容验证
 - 断网、恢复网络及认证过期测试
 
 ### 安全验证
 
-- 确认 App Group 不包含令牌
+- 确认额度展示和导出数据不包含令牌
 - 确认日志不输出凭据
 - 确认从未写入 `~/.codex`
 - 确认不会终止 Codex App 进程
@@ -488,30 +438,25 @@ codex --version
 
 2026-10-01 第三阶段已实现原生 SwiftUI 菜单栏应用，可展示三个账号的套餐、五小时/周剩余额度、服务端重置时间及最后更新时间，支持启动查询、手动刷新和错误时保留旧数据。正常卡片不单独显示额度更新时间，统一查看底部查询完成时间；查询失败而保留旧额度的卡片灰显，并显示“上次成功更新”及旧数据时间。用户已确认菜单栏入口和刷新按钮可见，并提供界面截图。详情见仓库内 `docs/phase-3-menu-bar.md`。
 
-账号标题已改为动态读取 Codex 个人资料页的真实 `username`，不写死三个用户名，也不以邮箱前缀代替。`account/read` 不提供此字段；用户已明确授权新增只读内部资料接口 `GET https://chatgpt.com/backend-api/profiles/me`，仅使用各账号独立 `CODEX_HOME` 中的登录凭据，读取 `profile_details.username`。三个账号已真实查询成功，刷新时名称同步更新。名称与凭据不进入 Git、额度报告或共享快照，现有别名保留在本地账号管理配置中。资料失败单独提示并保留最近名称，不影响额度结果；内部接口可能随 App 升级变化。
+账号标题已改为动态读取 Codex 个人资料页的真实 `username`，不写死三个用户名，也不以邮箱前缀代替。`account/read` 不提供此字段；用户已明确授权新增只读内部资料接口 `GET https://chatgpt.com/backend-api/profiles/me`，仅使用各账号独立 `CODEX_HOME` 中的登录凭据，读取 `profile_details.username`。三个账号已真实查询成功，刷新时名称同步更新。名称与凭据不进入 Git 或额度报告，现有别名保留在本地账号管理配置中。资料失败单独提示并保留最近名称，不影响额度结果；内部接口可能随 App 升级变化。
 
 此授权仅允许上述用户名资料查询，额度仍通过 app-server 读取，其余未公开 HTTP 接口不在范围内。
 
-### 第四阶段：Widget，1人天
+### 第四阶段：自动请求调度、后台运行与打包，工期待重新估算
 
-- App Group
-- Widget 布局
-- Timeline 和刷新
-
-### 第五阶段：后台运行与打包，1～2人天
-
-- 开机启动
-- 定时刷新
+- 启动时发送最小模型请求，按服务端五小时重置时间调度后续请求
+- 对周额度耗尽、额度未知或认证失效的账号停止自动请求
+- 开机启动、定时额度查询和唤醒恢复
 - 日志和错误恢复
 - 签名及 DMG
 
-### 第六阶段：测试和适配，1人天
+### 第五阶段：测试和适配，原估算 1人天
 
 - 三账号联调
 - Codex App 并行使用验证
 - 协议兼容测试
 
-预计总工作量：5～8人天。
+前三阶段已完成；剩余工作为自动请求调度、后台运行、打包及测试适配。工期需按当前范围重新评估，自动请求功能尚未重新估算。
 
 ## 16. iOS App 与跨设备同步方案
 
@@ -556,7 +501,6 @@ CodexPulse
 ├── iOS App
 │   ├── AccountList
 │   └── QuotaDetail
-├── macOS Widget
 └── iOS Widget
 ```
 
@@ -614,9 +558,7 @@ struct SyncedQuotaWindow: Codable {
 Mac 端：
 
 - 每 15～30 分钟查询三个账号
-- 查询成功后更新本地 App Group
 - 将最新快照写入 CloudKit 私有数据库
-- 在额度发生变化时刷新 macOS Widget
 
 iOS App：
 
@@ -694,7 +636,7 @@ Medium Widget 示例：
 
 iOS 增量工作量约为 3～6人天。
 
-macOS、iOS及两端 Widget 全部完成，预计总工作量约为 8～13人天。
+整体工期需结合当前 macOS 剩余任务与上述 iOS 增量范围重新评估，暂不沿用原整体估算。
 
 使用 CloudKit、App Groups 和真机分发时，需要配置相应的 Apple Developer 能力、Bundle Identifier、Entitlements 及 CloudKit Container。
 
@@ -705,7 +647,7 @@ macOS、iOS及两端 Widget 全部完成，预计总工作量约为 8～13人天
 - 个人自用，不上架 Mac App Store
 - 使用已安装的 `/opt/homebrew/bin/codex`
 - 三个账号全部使用独立 `CODEX_HOME`
-- 菜单栏应用常驻，Widget 只读取快照
+- 菜单栏应用常驻，统一展示额度并承担自动请求调度
 - 每 15～30 分钟刷新一次
 - 按第 1.1 节实现启动时及 5 小时窗口重置后的最小模型请求，对周额度耗尽的账号停止自动请求
 - 不自建服务器
@@ -717,7 +659,7 @@ macOS、iOS及两端 Widget 全部完成，预计总工作量约为 8～13人天
 
 推荐分两个阶段实施：
 
-1. 第一阶段先验证登录、额度接口及最小模型请求完整执行，再按官方窗口规则完成 macOS 菜单栏应用、三账号隔离、额度采集、自动请求调度和 macOS Widget，验证核心数据链路及长期稳定性。
+1. 第一阶段先验证登录、额度接口及最小模型请求完整执行，再按官方窗口规则完成 macOS 菜单栏应用、三账号隔离、额度采集、自动请求调度，验证核心数据链路及长期稳定性。
 2. 第二阶段增加 CloudKit 私有数据库、iOS App 和 iOS Widget。iOS端只负责读取和展示额度快照，不接触 Codex 登录凭据。
 
-这种实施顺序能够把最大的协议风险集中在 Mac 数据采集层。未来即使 `codex app-server` 发生变化，也只需要修改 `CodexProtocolAdapter`，不影响 CloudKit 数据结构和两端 Widget 的主要界面代码。
+这种实施顺序能够把最大的协议风险集中在 Mac 数据采集层。未来即使 `codex app-server` 发生变化，也只需要修改 `CodexProtocolAdapter`，不影响 CloudKit 数据结构和 iOS 展示层的主要界面代码。
