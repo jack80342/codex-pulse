@@ -6,11 +6,13 @@ let package = Package(
     platforms: [.macOS(.v14)],
     products: [
         .library(name: "CodexPulseCore", targets: ["CodexPulseCore"]),
-        .executable(name: "codex-pulse-probe", targets: ["CodexPulseProbe"])
+        .executable(name: "codex-pulse-probe", targets: ["CodexPulseProbe"]),
+        .executable(name: "codex-pulse", targets: ["CodexPulseCLI"])
     ],
     targets: [
         .target(name: "CodexPulseCore"),
         .executableTarget(name: "CodexPulseProbe", dependencies: ["CodexPulseCore"]),
+        .executableTarget(name: "CodexPulseCLI", dependencies: ["CodexPulseCore"]),
         .testTarget(
             name: "CodexPulseCoreTests",
             dependencies: ["CodexPulseCore"],

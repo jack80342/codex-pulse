@@ -2,6 +2,7 @@ import CodexPulseCore
 import Foundation
 import Testing
 
+@Suite(.serialized)
 struct ProtocolTests {
     private func withClient(
         mode: String, timeout: TimeInterval = 2,
@@ -91,6 +92,18 @@ struct ProtocolTests {
                                                                                workspace: paths.workspace, reportURL: file))
                 #expect(try ProbeReport.load(from: file).status == "incomplete")
             }
+        }
+    }
+
+    @Test
+    func testLoginTimeoutCancelsOnlyItsOwnLogin() throws {
+        try withClient(mode: "login-timeout") { client, paths in
+            try client.initialize()
+            expectThrows(try ProbeSession(client: client).login(timeout: 0.05) { _ in }) { error in
+                guard case ProbeError.timeout = error else { Issue.record("应返回登录超时"); return }
+            }
+            let methods = try String(contentsOf: paths.accountHome.appendingPathComponent("fixture-methods"), encoding: .utf8)
+            #expect(methods.contains("account/login/cancel"))
         }
     }
 

@@ -6,7 +6,7 @@ Codex 多账号额度管理工具，计划支持 macOS 桌面小组件、额度�
 
 ## 当前状态
 
-已实现第一阶段的 Swift 命令行验证程序，支持 app-server 握手、独立账号登录、额度读取、模型目录、单次最小模型请求及重置后对比。尚未创建 Xcode 工程或实现菜单栏、桌面小组件、长期自动请求和 iOS 功能。
+已实现协议验证程序和第二阶段的三账号管理命令行工具，支持独立登录、本地账号列表、别名修改、删除及并发额度查询。尚未创建 Xcode 工程或实现菜单栏、桌面小组件、长期自动请求和 iOS 功能。
 
 第一阶段协议验证已完成：独立 Plus 账号登录、真实额度读取和一次最小请求均成功。官方已明确新五小时窗口由上一窗口结束后的首条消息启动，无需等待额外窗口实验；原定重置后验证任务已取消。详细观测见 [第一阶段验证说明](docs/phase-1-verification.md)。当前没有配置 GitHub 远程仓库。
 
@@ -17,7 +17,7 @@ Codex 多账号额度管理工具，计划支持 macOS 桌面小组件、额度�
 ```bash
 cd /Users/j/github_repo/codex-pulse
 swift build
-swift test --disable-xctest
+./scripts/test.sh
 swift run codex-pulse-probe handshake
 swift run codex-pulse-probe login
 swift run codex-pulse-probe status
@@ -35,6 +35,21 @@ swift run codex-pulse-probe verify-reset --report "<首次报告的绝对路径>
 
 重置后验证沿用原报告模型并核对账号身份。未到重置时间、额度许可未知或已耗尽时停止，不发送模型请求。更多步骤和判定边界见 [第一阶段验证说明](docs/phase-1-verification.md)。
 
+## 三账号管理
+
+```bash
+swift run codex-pulse accounts add --name "账号1"
+swift run codex-pulse accounts list
+swift run codex-pulse accounts login --id "<列表中的固定 ID>"
+swift run codex-pulse accounts status
+swift run codex-pulse accounts rename --id "<ID>" --name "工作账号"
+swift run codex-pulse accounts remove --id "<ID>"
+```
+
+账号 ID 固定对应登录目录，别名可使用中文；最多三个账号。添加只登记条目，登录需要用户在浏览器完成。`status` 并发查询全部账号，单个失败会保留其他账号结果；同一个服务端账号被重复登录时会提示额度共享。以上命令不发送模型请求。
+
+`remove` 会删除所选账号的独立目录和凭据，保留历史验证报告；失败时保留待删除标记并可重试。已有 `probe-1` 可通过 `accounts add --id probe-1 --name "账号1"` 登记，直接使用其独立登录状态。详细流程及实际联调状态见 [第二阶段说明](docs/phase-2-account-management.md)。
+
 ## 第一版目标
 
 - 集中展示三个账号的五小时额度、周额度、重置时间和最后更新时间。
@@ -48,7 +63,7 @@ swift run codex-pulse-probe verify-reset --report "<首次报告的绝对路径>
 ## 开发顺序
 
 1. 验证 Codex app-server 初始化、额度读取及最小模型请求完整执行（已完成）。
-2. 实现三个账号的独立登录和账号管理。
+2. 实现三个账号的独立登录和账号管理（代码完成，真实三账号登录联调待完成）。
 3. 实现菜单栏额度展示、手动刷新及错误状态。
 4. 实现共享快照和 macOS 桌面小组件。
 5. 实现自动请求调度、后台运行、唤醒恢复和打包。
@@ -81,12 +96,15 @@ codex-pulse/
 ├── Package.swift
 ├── Sources/
 │   ├── CodexPulseCore/
-│   └── CodexPulseProbe/
+│   ├── CodexPulseProbe/
+│   └── CodexPulseCLI/
 ├── Tests/
 │   └── CodexPulseCoreTests/
 ├── docs/
 │   ├── design-plan.md
-│   └── phase-1-verification.md
+│   ├── phase-1-verification.md
+│   └── phase-2-account-management.md
+├── scripts/test.sh
 ├── .gitignore
 ├── .gitattributes
 └── .editorconfig

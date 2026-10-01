@@ -75,6 +75,8 @@ do {
         previousURL = nil
     }
     let paths = try ProbePaths(account: account)
+    let lease = try paths.acquireLease()
+    defer { withExtendedLifetime(lease) {} }
     try paths.prepare()
     let client = try AppServerClient(
         executable: URL(fileURLWithPath: executablePath), arguments: ProbePaths.serverArguments,
@@ -94,34 +96,11 @@ do {
             emit("该独立账号已经登录。")
             break
         }
-        let login = try client.request("account/login/start", params: ["type": "chatgpt"])
-        guard let loginID = login["loginId"] as? String, let rawURL = login["authUrl"] as? String,
-              let url = URL(string: rawURL), url.scheme == "https",
-              let host = url.host, ["auth.openai.com", "chatgpt.com", "auth.chatgpt.com"].contains(host) else {
-            throw ProbeError.invalidResponse
+        try session.login { url in
+            try LoginBrowser.open(url)
+            emit("浏览器已打开，请在浏览器登录用于验证的账号；等待最多 10 分钟。")
         }
-        let browser = Process()
-        browser.executableURL = URL(fileURLWithPath: "/usr/bin/open")
-        browser.arguments = [url.absoluteString]
-        do { try browser.run(); browser.waitUntilExit() } catch { throw ProbeError.launchFailed }
-        guard browser.terminationStatus == 0 else { throw ProbeError.launchFailed }
-        emit("浏览器已打开，请在浏览器登录用于验证的账号；等待最多 10 分钟。")
-        do {
-            let notification = try client.nextNotification(until: Date().addingTimeInterval(600)) {
-                $0["method"] as? String == "account/login/completed" &&
-                ($0["params"] as? [String: Any])?["loginId"] as? String == loginID
-            }
-            guard (notification["params"] as? [String: Any])?["success"] as? Bool == true else {
-                throw ProbeError.loginFailed
-            }
-            guard let info = try session.readAccount(), info["type"] as? String == "chatgpt" else {
-                throw ProbeError.unsupportedAccount
-            }
-            emit("独立账号登录成功；未输出邮箱或令牌。")
-        } catch {
-            _ = try? client.request("account/login/cancel", params: ["loginId": loginID])
-            throw error
-        }
+        emit("独立账号登录成功；未输出邮箱或令牌。")
     case "status": show(try session.readQuota())
     case "models":
         guard let info = try session.readAccount() else { throw ProbeError.notLoggedIn }
@@ -148,7 +127,7 @@ do {
     default: break
     }
 } catch {
-    let message = (error as? ProbeError)?.description ?? "本地文件操作失败，未输出原始认证或日志内容。"
+    let message = (error as? ProbeError)?.description ?? (error as? AccountError)?.description ?? "本地文件操作失败，未输出原始认证或日志内容。"
     FileHandle.standardError.write(Data(("验证停止：" + message + "\n").utf8))
     exit(1)
 }

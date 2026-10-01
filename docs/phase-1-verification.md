@@ -15,10 +15,10 @@
 ```bash
 cd /Users/j/github_repo/codex-pulse
 swift build
-swift test --disable-xctest
+./scripts/test.sh
 ```
 
-应用运行只依赖 Swift 标准库、Foundation、CryptoKit 和本机 Codex CLI，无第三方包。协议测试额外使用 Python 3 运行本地模拟 JSONL 服务；它不访问网络或真实账号。测试使用 Swift Testing，关闭 XCTest 支持以适配仅安装 Command Line Tools 的环境。
+应用运行只依赖 Swift 标准库、Foundation、CryptoKit 和本机 Codex CLI，无第三方包。协议测试额外使用 Python 3 运行本地模拟 JSONL 服务；它不访问网络或真实账号。测试使用 Swift Testing，关闭 XCTest 支持以适配仅安装 Command Line Tools 的环境。`scripts/test.sh` 从当前工具链查找并显式加载 Testing 宏插件，兼容 Swift 6.4 的 swiftbuild 在本机遗漏插件的情况。
 
 ## 实测步骤
 

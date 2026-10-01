@@ -1,6 +1,17 @@
 import Foundation
 
-public struct ProbePaths {
+public enum LoginBrowser {
+    public static func open(_ url: URL) throws {
+        let browser = Process()
+        browser.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+        browser.arguments = [url.absoluteString]
+        do { try browser.run(); browser.waitUntilExit() } catch { throw ProbeError.launchFailed }
+        guard browser.terminationStatus == 0 else { throw ProbeError.launchFailed }
+    }
+}
+
+public struct ProbePaths: Sendable {
+    public let root: URL
     public let accountHome: URL
     public let workspace: URL
     public let reports: URL
@@ -11,25 +22,30 @@ public struct ProbePaths {
         else { throw ProbeError.invalidArgument("账号别名仅支持 1～64 位字母、数字、连字符和下划线。") }
         let base = root ?? FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent("Library/Application Support/CodexPulse")
+        self.root = base
         accountHome = base.appendingPathComponent("accounts/\(account)")
         workspace = base.appendingPathComponent("verification/\(account)/workspace")
         reports = base.appendingPathComponent("verification/\(account)/reports")
     }
 
     public func prepare() throws {
-        let officialHome = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".codex").resolvingSymlinksInPath().path
+        for url in [root, root.appendingPathComponent("accounts"), root.appendingPathComponent("verification"),
+                    root.appendingPathComponent("verification/\(accountHome.lastPathComponent)")] {
+            try PrivateStorage.directory(url)
+        }
         for url in [accountHome, workspace, reports] {
-            let resolved = url.resolvingSymlinksInPath().path
-            guard resolved != officialHome, !resolved.hasPrefix(officialHome + "/") else {
-                throw ProbeError.invalidArgument("验证目录不能指向日常 Codex 的认证目录。")
-            }
-            try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true,
-                                                    attributes: [.posixPermissions: 0o700])
-            try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: url.path)
+            try PrivateStorage.directory(url)
         }
         guard try FileManager.default.contentsOfDirectory(atPath: workspace.path).isEmpty else {
             throw ProbeError.invalidArgument("专用工作目录必须为空，避免读取项目内容。")
         }
+    }
+
+    public func acquireLease() throws -> AccountLease {
+        try PrivateStorage.directory(root)
+        let locks = root.appendingPathComponent("account-locks")
+        try PrivateStorage.directory(locks)
+        return try AccountLease(file: locks.appendingPathComponent("\(accountHome.lastPathComponent).lock"))
     }
 
     public static let serverArguments = [
@@ -53,6 +69,34 @@ public final class ProbeSession {
     public let client: AppServerClient
 
     public init(client: AppServerClient) { self.client = client }
+
+    /// 两个命令行入口共用认证流程；URL 仅交给浏览器打开，不保存或输出。
+    public func login(timeout: TimeInterval = 600, openURL: (URL) throws -> Void) throws {
+        guard timeout.isFinite, timeout > 0 else { throw ProbeError.invalidArgument("登录超时必须是正数。") }
+        if let account = try readAccount() {
+            guard account["type"] as? String == "chatgpt" else { throw ProbeError.unsupportedAccount }
+            return
+        }
+        let login = try client.request("account/login/start", params: ["type": "chatgpt"])
+        guard let loginID = login["loginId"] as? String else { throw ProbeError.invalidResponse }
+        do {
+            guard let rawURL = login["authUrl"] as? String, let url = URL(string: rawURL), url.scheme == "https",
+                  let host = url.host, ["auth.openai.com", "chatgpt.com", "auth.chatgpt.com"].contains(host),
+                  url.user == nil, url.password == nil, url.port == nil || url.port == 443 else {
+                throw ProbeError.invalidResponse
+            }
+            try openURL(url)
+            let notification = try client.nextNotification(until: Date().addingTimeInterval(timeout)) {
+                $0["method"] as? String == "account/login/completed" &&
+                ($0["params"] as? [String: Any])?["loginId"] as? String == loginID
+            }
+            guard (notification["params"] as? [String: Any])?["success"] as? Bool == true else { throw ProbeError.loginFailed }
+            guard let account = try readAccount(), account["type"] as? String == "chatgpt" else { throw ProbeError.unsupportedAccount }
+        } catch {
+            _ = try? client.request("account/login/cancel", params: ["loginId": loginID])
+            throw error
+        }
+    }
 
     public func readAccount() throws -> [String: Any]? {
         let result = try client.request("account/read", params: ["refreshToken": false])
