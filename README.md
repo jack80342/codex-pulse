@@ -6,7 +6,34 @@ Codex 多账号额度管理工具，计划支持 macOS 桌面小组件、额度�
 
 ## 当前状态
 
-当前为仓库初始化阶段，包含设计方案和基础仓库配置。尚未创建 Xcode 工程或实现应用功能，也未配置账号登录、自动请求和 GitHub 远程仓库。
+已实现第一阶段的 Swift 命令行验证程序，支持 app-server 握手、独立账号登录、额度读取、模型目录、单次最小模型请求及重置后对比。尚未创建 Xcode 工程或实现菜单栏、桌面小组件、长期自动请求和 iOS 功能。
+
+真实账号的五小时窗口触发机制仍需实测，不能将本地测试通过表述为自动触发成功。当前没有配置 GitHub 远程仓库。
+
+## 第一阶段验证
+
+需要 macOS 14 及以上、Swift 6 及以上和已安装的 Codex CLI。本次协议适配依据本机 Codex CLI 0.158.0 生成的 JSON Schema。
+
+```bash
+cd /Users/j/github_repo/codex-pulse
+swift build
+swift test --disable-xctest
+swift run codex-pulse-probe handshake
+swift run codex-pulse-probe login
+swift run codex-pulse-probe status
+swift run codex-pulse-probe models
+swift run codex-pulse-probe probe
+```
+
+`login` 打开浏览器，由用户完成验证账号登录；`probe` 发送一次真实模型请求，会消耗额度。可通过 `--model` 指定模型目录返回的模型，省略时使用目录默认模型，并选择其支持的最低推理档位及 Standard 速度。
+
+首次请求完成后，程序输出报告的绝对路径。到达报告记录的五小时重置时间后，再执行：
+
+```bash
+swift run codex-pulse-probe verify-reset --report "<首次报告的绝对路径>"
+```
+
+重置后验证沿用原报告模型并核对账号身份。未到重置时间、额度许可未知或已耗尽时停止，不发送模型请求。更多步骤和判定边界见 [第一阶段验证说明](docs/phase-1-verification.md)。
 
 ## 第一版目标
 
@@ -51,8 +78,15 @@ Codex 多账号额度管理工具，计划支持 macOS 桌面小组件、额度�
 ```text
 codex-pulse/
 ├── README.md
+├── Package.swift
+├── Sources/
+│   ├── CodexPulseCore/
+│   └── CodexPulseProbe/
+├── Tests/
+│   └── CodexPulseCoreTests/
 ├── docs/
-│   └── design-plan.md
+│   ├── design-plan.md
+│   └── phase-1-verification.md
 ├── .gitignore
 ├── .gitattributes
 └── .editorconfig
