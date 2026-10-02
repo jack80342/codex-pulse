@@ -52,6 +52,7 @@ public final class AppServerClient: @unchecked Sendable {
     private var failure: ProbeError?
     private var nextID = 0
     private var closed = false
+    private var closeFinished = false
     public let timeout: TimeInterval
     public var isRunning: Bool { process.isRunning }
 
@@ -71,6 +72,8 @@ public final class AppServerClient: @unchecked Sendable {
         ] {
             environment.removeValue(forKey: key)
         }
+        // GUI 进程的 PATH 可能不包含 Node 安装目录，npm CLI 的 env node 需同目录运行时。
+        environment["PATH"] = executable.deletingLastPathComponent().path + ":" + (environment["PATH"] ?? "/usr/bin:/bin:/usr/sbin:/sbin")
         environment["CODEX_HOME"] = codexHome.path
         process.environment = environment
         process.executableURL = executable
@@ -100,12 +103,12 @@ public final class AppServerClient: @unchecked Sendable {
         try write(["method": "initialized", "params": [:]])
     }
 
-    public func request(_ method: String, params: [String: Any] = [:]) throws -> [String: Any] {
+    public func request(_ method: String, params: [String: Any]? = [:]) throws -> [String: Any] {
         operationLock.lock()
         defer { operationLock.unlock() }
         nextID += 1
         let id = String(nextID)
-        try write(["id": id, "method": method, "params": params])
+        try write(["id": id, "method": method, "params": params as Any? ?? NSNull()])
         let deadline = Date().addingTimeInterval(timeout)
         condition.lock()
         defer { condition.unlock() }
@@ -140,7 +143,12 @@ public final class AppServerClient: @unchecked Sendable {
 
     public func close() {
         condition.lock()
-        guard !closed else { condition.unlock(); return }
+        if closed {
+            // 取消登录与会话 defer 可能同时关闭；必须等进程退出后才释放账号租约。
+            while !closeFinished { condition.wait() }
+            condition.unlock()
+            return
+        }
         closed = true
         failure = .processExited
         condition.broadcast()
@@ -156,6 +164,10 @@ public final class AppServerClient: @unchecked Sendable {
                 _ = termination.wait(timeout: .now() + 1)
             }
         }
+        condition.lock()
+        closeFinished = true
+        condition.broadcast()
+        condition.unlock()
     }
 
     private func write(_ message: [String: Any]) throws {

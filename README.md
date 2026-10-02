@@ -8,7 +8,7 @@ Repository: `codex-pulse`. App name: `Codex Pulse`. Swift package: `CodexPulse`.
 
 ## Current status
 
-Protocol verification, a three-account management CLI, and the native menu bar app are implemented. The app displays accounts, five-hour and weekly quotas, server reset times, and query errors, with manual refresh. Automatic requests on launch and after resets, per-window deduplication, wake recovery, installation, launch at login, and DMG packaging are also implemented. iOS support remains planned. Account titles use real usernames retrieved dynamically from the profile endpoint and updated on refresh.
+Protocol verification, an account management CLI and in-app account controls, and the native menu bar app are implemented. The app displays accounts, five-hour and weekly quotas, server reset times, and query errors, with manual refresh. Automatic requests on launch and after resets, per-window deduplication, wake recovery, installation, launch at login, and DMG packaging are also implemented. iOS support remains planned. Account titles use real usernames retrieved dynamically from the profile endpoint and updated on refresh.
 
 Phase 1 verification is complete: an independent Plus account was authenticated, its quotas were read, and one minimal request completed successfully. The official five-hour window rule is the implementation basis; no additional window experiment is required, and the originally planned post-reset experiment was canceled. See the [phase 1 verification notes](docs/phase-1-verification.md). GitHub `origin` is configured. As requested on October 2, 2026, subsequent changes are verified, committed with Chinese commit messages, and pushed automatically.
 
@@ -65,15 +65,23 @@ cd /Users/j/github_repo/codex-pulse
 open ".build/app/Codex Pulse.app"
 ```
 
-The app reads all three accounts on launch. Click its ECG-style menu bar icon to view results; the refresh button queries accounts concurrently. Failed queries retain the last successful quota snapshot, shown in gray with its timestamp. Missing quota windows remain unknown.
+The app reads all registered accounts on launch. Click its ECG-style menu bar icon to view results; the refresh button queries accounts concurrently. Failed queries retain the last successful quota snapshot, shown in gray with its timestamp. Missing quota windows remain unknown.
 
 After reading quotas, the app sends one real minimal request for each eligible account that has not already been attempted in the current window. Further requests follow each account's server-reported five-hour reset time. Manual refresh rechecks scheduling but does not repeat a request in the same window. An account stops automatic requests when its weekly quota is exhausted or its windows are unknown. Restarting or waking the Mac restores the current schedule without sending catch-up requests for missed windows.
 
-Account creation, deletion, login, and alias changes use the CLI below. Usernames come from a user-authorized, read-only internal profile endpoint. Profile failures retain the most recent name and display an error; quota queries are handled independently.
+Account creation, login, retry, and deletion are available in the menu bar panel. The CLI below remains available, including alias changes. Usernames come from a user-authorized, read-only internal profile endpoint. Profile failures retain the most recent name and display an error; quota queries are handled independently.
 
 The SwiftUI app is built with Command Line Tools and produces a locally ad-hoc-signed `.app`. See the [phase 3 notes](docs/phase-3-menu-bar.md) for profile endpoint limitations and the [phase 4 notes](docs/phase-4-automatic-requests.md) for scheduling, verification, and failure recovery.
 
-## Three-account management
+## Account management
+
+First use of the installed app does not require Swift or a source checkout. Install Codex CLI separately, open the app, and click **添加第一个账号** (Add your first account). If CLI is available, this opens browser authorization directly; otherwise it opens installation guidance. The app detects Codex CLI automatically. Under **添加 / 管理账号** (Add / Manage accounts), click **添加账号** (Add account) to open browser authorization directly. Confirm the intended ChatGPT account in the browser. Successful login refreshes the real profile username and quota and starts eligible automatic scheduling. Minimal requests consume quota.
+
+The same section remains available for adding more accounts, retrying failed or canceled logins, reauthenticating, and deleting local entries. There is no alias input. A new entry uses a generated temporary label until its real username is retrieved. Canceling or failing login retains a manageable entry. Reauthentication signs out only that entry before opening authorization; a canceled or failed reauthentication may require login again. Deletion removes local credentials and stops that entry's scheduling, with a confirmation dialog. It does not delete the ChatGPT account. Changes refresh the panel and scheduling immediately; while an account operation is in progress, refresh and automatic scheduling pause to avoid conflicting operations. Duplicate identities share quota and only the first eligible entry sends automatic requests.
+
+Automatic lookup checks Homebrew, absolute `PATH` entries, common user install directories, and nvm/fnm Node versions. There is no executable picker or path setting. If CLI is missing, install it and click **重新检测** (Detect again); the app also checks when returning to the foreground. The installer contains no credentials and does not install Codex CLI. See the [onboarding and account management notes](docs/phase-5-account-management.md).
+
+Optional CLI workflow for developers:
 
 ```bash
 swift run codex-pulse accounts add --name "Account 1"
@@ -84,7 +92,7 @@ swift run codex-pulse accounts rename --id "<ID>" --name "Work account"
 swift run codex-pulse accounts remove --id "<ID>"
 ```
 
-Each account ID maps to a fixed login directory; aliases can include Chinese characters. At most three accounts are supported. Adding an account only registers an entry; authentication requires browser interaction. `status` queries all accounts concurrently, preserving other accounts' results when one fails. Duplicate logins to the same server account are identified as sharing quota. These commands do not send model requests.
+Each account ID maps to a fixed login directory; aliases can include Chinese characters. There is no account count limit; quota queries and automatic requests use at most three workers at a time. Adding an account only registers an entry; authentication requires browser interaction. `status` queries all accounts concurrently, preserving other accounts' results when one fails. Duplicate logins to the same server account are identified as sharing quota. These commands do not send model requests.
 
 The current three accounts have been authenticated and queried concurrently: accounts 1 and 3 are Plus, and account 2 is confirmed as Free. The Free account currently returns no five-hour or weekly windows, so both remain unknown. Eligibility follows server permissions and available quota windows, without inventing quota values or reset times from the plan name.
 
@@ -92,7 +100,7 @@ The current three accounts have been authenticated and queried concurrently: acc
 
 ## First-release goals
 
-- Display all three accounts' five-hour and weekly quotas, reset times, and update times.
+- Display all registered accounts' five-hour and weekly quotas, reset times, and update times.
 - Provide a menu bar app for account login, quota queries, display, and automatic request scheduling.
 - Send one minimal request for eligible accounts on launch. This starts an inactive five-hour window; an existing window is not restarted.
 - Schedule subsequent requests using server-reported five-hour reset times, stopping an account when its weekly quota is exhausted.
@@ -103,10 +111,10 @@ The [official usage guidance](https://help.openai.com/en/articles/20001516-manag
 ## Development sequence
 
 1. Verify Codex app-server initialization, quota reads, and full execution of a minimal model request: complete.
-2. Implement independent logins and account management for three accounts: complete, with two Plus accounts and one Free account authenticated and queried concurrently.
+2. Implement independent logins and account management: complete, with two Plus accounts and one Free account authenticated and queried concurrently.
 3. Implement menu bar quota display, manual refresh, and error states: complete, including dynamic profile usernames.
 4. Implement automatic requests, per-window deduplication, wake recovery, installation, launch at login, and DMG packaging: complete. Production signing and notarization remain pending.
-5. Complete account integration, error handling, and verification alongside the everyday Codex App.
+5. In-app onboarding and account management are implemented in 0.6.0. Browser authorization and macOS dialogs still require manual acceptance checks.
 
 CloudKit private database synchronization, an iOS app, and iPhone widgets are planned for a later phase.
 
@@ -153,7 +161,8 @@ codex-pulse/
 │   ├── phase-2-account-management.md
 │   ├── phase-3-menu-bar.md
 │   ├── phase-4-automatic-requests.md
-│   └── phase-4-installation.md
+│   ├── phase-4-installation.md
+│   └── phase-5-account-management.md
 ├── Resources/Info.plist
 ├── scripts/build-app.sh
 ├── scripts/install-app.sh

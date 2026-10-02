@@ -6,6 +6,7 @@ import AppKit
 final class ApplicationDelegate: NSObject, NSApplicationDelegate {
     static let model = MenuBarModel.live()
     static let loginItem = LoginItemModel()
+    static let accounts = AccountManagementModel.live(menu: model)
     private var workspaceObservers: [NSObjectProtocol] = []
     private var clockObserver: NSObjectProtocol?
 
@@ -35,7 +36,7 @@ struct CodexPulseApp: App {
 
     var body: some Scene {
         MenuBarExtra("Codex Pulse", systemImage: "waveform.path.ecg") {
-            MenuBarPanel(model: model, loginItem: ApplicationDelegate.loginItem)
+            MenuBarPanel(model: model, loginItem: ApplicationDelegate.loginItem, accounts: ApplicationDelegate.accounts)
         }
         .menuBarExtraStyle(.window)
     }

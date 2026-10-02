@@ -8,7 +8,7 @@ public enum AccountError: Error, CustomStringConvertible {
         switch self {
         case .invalidName: "账号别名须为 1～64 个可显示字符。"
         case .duplicateID: "该账号 ID 已在列表中。"
-        case .accountLimit: "最多管理三个账号，请先删除不再使用的账号。"
+        case .accountLimit: "账号数量限制已取消。"
         case .notFound: "账号 ID 不在管理列表中。"
         case .deleting: "账号正在删除；请再次执行 remove 完成本地清理。"
         case .busy: "账号或列表正在被另一操作使用，请稍后再试。"
@@ -115,7 +115,7 @@ public struct AccountStore: Sendable {
         if try PrivateStorage.regularFile(registryURL) {
             do { registry = try JSONDecoder().decode(AccountRegistry.self, from: Data(contentsOf: registryURL)) }
             catch { throw AccountError.invalidStorage }
-            guard registry.schemaVersion == 1, registry.accounts.count <= 3,
+            guard registry.schemaVersion == 1,
                   Set(registry.accounts.map(\.id)).count == registry.accounts.count else { throw AccountError.invalidStorage }
             for account in registry.accounts {
                 _ = try ProbePaths(account: account.id, root: root)
@@ -148,7 +148,6 @@ public struct AccountStore: Sendable {
         _ = try ProbePaths(account: id, root: root)
         return try locked { registry in
             guard !registry.accounts.contains(where: { $0.id == id }) else { throw AccountError.duplicateID }
-            guard registry.accounts.count < 3 else { throw AccountError.accountLimit }
             let account = ManagedAccount(id: id, name: name, createdAt: Date(), pendingDeletion: false)
             registry.accounts.append(account)
             try save(registry)

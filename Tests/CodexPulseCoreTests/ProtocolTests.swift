@@ -15,7 +15,7 @@ struct ProtocolTests {
         let python = ["/usr/bin/python3", "/opt/homebrew/bin/python3"].first(where: FileManager.default.isExecutableFile(atPath:))
         let executable = try #require(python)
         let fixture = try #require(Bundle.module.url(forResource: "app-server", withExtension: "py", subdirectory: "Fixtures"))
-        let client = try AppServerClient(executable: URL(fileURLWithPath: executable), arguments: [fixture.path, mode],
+        let client = try AppServerClient(executable: URL(fileURLWithPath: executable), arguments: [fixture.path, mode, URL(fileURLWithPath: executable).deletingLastPathComponent().path],
                                          codexHome: paths.accountHome, workspace: paths.workspace, timeout: timeout)
         defer { client.close(); #expect(!(client.isRunning)) }
         try body(client, paths)
@@ -31,6 +31,15 @@ struct ProtocolTests {
     }
 
     @Test
+    func testDiscoveredCLIEnvironmentIncludesItsRuntimeDirectory() throws {
+        try withClient(mode: "executable-path") { client, _ in
+            try client.initialize()
+            let response = try client.request("ping")
+            #expect(response["echo"] as? String == "ping")
+        }
+    }
+
+    @Test
     func testTimeoutIsBoundedAndProcessCloses() throws {
         try withClient(mode: "timeout", timeout: 0.1) { client, _ in
             let start = Date()
@@ -38,6 +47,25 @@ struct ProtocolTests {
                 guard case ProbeError.timeout = error else { Issue.record("应返回超时"); return }
             }
             #expect(Date().timeIntervalSince(start) < 1)
+        }
+    }
+
+    @Test
+    func testConcurrentCloseWaitsForOwnedProcessBeforeReturning() throws {
+        try withClient(mode: "slow-close") { client, paths in
+            try client.initialize()
+            let finished = DispatchGroup()
+            finished.enter()
+            DispatchQueue.global().async { client.close(); finished.leave() }
+            let marker = paths.accountHome.appendingPathComponent("fixture-closing")
+            let deadline = Date().addingTimeInterval(2)
+            while !FileManager.default.fileExists(atPath: marker.path), Date() < deadline {
+                Thread.sleep(forTimeInterval: 0.001)
+            }
+            #expect(FileManager.default.fileExists(atPath: marker.path))
+            client.close()
+            #expect(!client.isRunning)
+            #expect(finished.wait(timeout: .now() + 1) == .success)
         }
     }
 

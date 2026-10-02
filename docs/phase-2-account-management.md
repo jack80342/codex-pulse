@@ -1,5 +1,7 @@
 # 第二阶段：三账号管理
 
+2026-10-02 更新：本页保留当时的实现和验证记录；当前已取消三个账号的数量上限，并提供应用内添加、登录重试、取消、重新登录和删除。最新使用方式见[首次使用与账号管理说明](phase-5-account-management.md)。
+
 ## 范围与结构
 
 新增 `codex-pulse accounts` 命令行入口。`AccountStore` 管理本地列表和目录操作；`AccountService` 编排独立登录与额度读取，复用已有 `ProbeSession` 和 `AppServerClient`。本说明记录账号管理阶段；菜单栏的后续进展见 [第三阶段说明](phase-3-menu-bar.md)。

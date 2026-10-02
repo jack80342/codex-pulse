@@ -83,6 +83,50 @@ struct AccountServiceTests {
     }
 
     @Test
+    func testForcedLoginOpensBrowserAgainWithoutChangingOtherAccount() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("CodexPulseReauth-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let service = try service(root: root, modes: ["a": "login-success"])
+        for id in ["a", "b"] { try service.store.add(name: id, id: id) }
+        var opened = 0
+        try service.login(id: "a") { _ in opened += 1 }
+        try service.login(id: "a", forceReauthentication: true) { _ in opened += 1 }
+        #expect(opened == 2)
+        #expect(try service.status(id: "a").state == "loggedIn")
+        #expect(try service.status(id: "b").state == "loggedIn")
+        let methods = try String(contentsOf: root.appendingPathComponent("accounts/a/fixture-methods"), encoding: .utf8)
+        #expect(methods.contains("account/logout"))
+        #expect(!methods.contains("turn/start"))
+    }
+
+    @Test
+    func testLoginCancellationReleasesActiveServerAndLease() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("CodexPulseCancel-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let service = try service(root: root, modes: ["a": "login-timeout"])
+        try service.store.add(name: "A", id: "a")
+        let cancellation = LoginCancellation()
+        let start = Date()
+        expectThrows(try service.login(id: "a", cancellation: cancellation) { _ in cancellation.cancel() })
+        #expect(cancellation.isCancelled)
+        #expect(Date().timeIntervalSince(start) < 5)
+        try service.store.remove(id: "a")
+        #expect(try service.store.list().isEmpty)
+    }
+
+    @Test
+    func testMoreThanThreeStatusesPreserveOrderAndIsolateErrors() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("CodexPulseMany-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let service = try service(root: root, modes: ["b": "account-quota-error", "f": "account-unlogged"])
+        let ids = ["a", "b", "c", "d", "e", "f", "g"]
+        for id in ids { try service.store.add(name: id, id: id) }
+        let results = try await service.statuses()
+        #expect(results.map { $0.account.id } == ids)
+        #expect(results.map(\.state) == ["loggedIn", "quotaError", "loggedIn", "loggedIn", "loggedIn", "notLoggedIn", "loggedIn"])
+    }
+
+    @Test
     func testFailedAndUnsafeLoginCancelAndReleaseLease() throws {
         for mode in ["login-failed", "login-invalid-url"] {
             let root = FileManager.default.temporaryDirectory.appendingPathComponent("CodexPulseLogin-\(UUID().uuidString)")

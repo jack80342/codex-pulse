@@ -58,18 +58,23 @@ public struct AutomaticRequestService: Sendable {
         }
         let allowed = permitted
         return await withTaskGroup(of: (Int, AutomaticRequestResult).self) { group in
-            for (index, status) in statuses.enumerated() {
-                group.addTask {
-                    guard allowed.contains(status.account.id), let identity = status.snapshot?.identityDigest else {
-                        return (index, AutomaticRequestResult(accountID: status.account.id,
-                            message: status.state == "loggedIn" && status.snapshot?.identityDigest != nil
-                                ? "重复登录，自动请求暂停" : "账号或额度状态未知，自动请求暂停"))
-                    }
-                    return (index, process(id: status.account.id, expectedIdentity: identity))
+            let operation: @Sendable (Int, AccountStatus) -> (Int, AutomaticRequestResult) = { index, status in
+                guard allowed.contains(status.account.id), let identity = status.snapshot?.identityDigest else {
+                    return (index, AutomaticRequestResult(accountID: status.account.id,
+                        message: status.state == "loggedIn" && status.snapshot?.identityDigest != nil
+                            ? "重复登录，自动请求暂停" : "账号或额度状态未知，自动请求暂停"))
                 }
+                return (index, process(id: status.account.id, expectedIdentity: identity))
+            }
+            var iterator = statuses.enumerated().makeIterator()
+            for _ in 0..<3 {
+                if let (index, status) = iterator.next() { group.addTask { operation(index, status) } }
             }
             var results: [(Int, AutomaticRequestResult)] = []
-            for await result in group { results.append(result) }
+            for await result in group {
+                results.append(result)
+                if let (index, status) = iterator.next() { group.addTask { operation(index, status) } }
+            }
             return results.sorted { $0.0 < $1.0 }.map(\.1)
         }
     }

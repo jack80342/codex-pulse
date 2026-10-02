@@ -236,6 +236,28 @@ struct AutomaticRequestTests {
     }
 
     @Test
+    func moreThanThreeAccountsRequestOnceAndKeepResultOrder() async throws {
+        let root = root()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = AccountStore(root: root)
+        let ids = ["a", "b", "c", "d", "e", "f"]
+        for id in ids {
+            try store.add(name: id, id: id)
+            try quota(store, id: id, ["reset": 1_900_000_120])
+        }
+        let statuses = try store.list().map { account in
+            AccountStatus(account: account, state: "loggedIn",
+                snapshot: try QuotaSnapshot.decode(Data("{\"accountId\":\"fixture-\(account.id)\",\"rateLimitsByLimitId\":{}}".utf8)), error: nil)
+        }
+        let service = try service(store, at: date)
+        let results = await service.run(statuses: statuses)
+        #expect(results.map(\.accountID) == ids)
+        #expect(results.allSatisfy { $0.message == "最小请求已完成" })
+        _ = await service.run(statuses: statuses)
+        for id in ids { #expect(try attempts(root, id: id) == 1) }
+    }
+
+    @Test
     func threeAccountsIsolateUnknownWindowAndDuplicateIdentity() async throws {
         let root = root()
         defer { try? FileManager.default.removeItem(at: root) }

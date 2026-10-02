@@ -39,11 +39,14 @@ public struct AccountService: Sendable {
         self.readUsername = readUsername
     }
 
-    public func login(id: String, openURL: (URL) throws -> Void) throws {
+    public func login(id: String, forceReauthentication: Bool = false, cancellation: LoginCancellation? = nil, openURL: (URL) throws -> Void) throws {
         try store.withAccount(id: id) { _, paths in
             let client = try makeClient(paths)
             defer { client.close() }
+            try cancellation?.bind(client)
+            defer { cancellation?.unbind() }
             try client.initialize()
+            if forceReauthentication { _ = try client.request("account/logout", params: nil) }
             try ProbeSession(client: client).login(openURL: openURL)
         }
     }
@@ -86,11 +89,15 @@ public struct AccountService: Sendable {
     public func statuses() async throws -> [AccountStatus] {
         let accounts = try store.list()
         return await withTaskGroup(of: (Int, AccountStatus).self) { group in
-            for (index, account) in accounts.enumerated() {
-                group.addTask { (index, status(account)) }
+            var iterator = accounts.enumerated().makeIterator()
+            for _ in 0..<3 {
+                if let (index, account) = iterator.next() { group.addTask { (index, status(account)) } }
             }
             var results: [(Int, AccountStatus)] = []
-            for await result in group { results.append(result) }
+            for await result in group {
+                results.append(result)
+                if let (index, account) = iterator.next() { group.addTask { (index, status(account)) } }
+            }
             return results.sorted { $0.0 < $1.0 }.map(\.1)
         }
     }

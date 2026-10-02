@@ -208,6 +208,19 @@ struct MenuBarModelTests {
     }
 
     @Test
+    func logoutClearsCachedUsernameAndQuota() async throws {
+        let original = try status("a", username: "old-user")
+        let loader = FixtureLoader([original])
+        let model = model(loader)
+        await model.refresh()
+        await loader.update([AccountStatus(account: original.account, state: "notLoggedIn", snapshot: nil, error: nil)])
+        await model.refresh()
+        #expect(model.rows[0].displayName == "a")
+        #expect(model.rows[0].snapshot == nil)
+        #expect(!model.rows[0].isStale)
+    }
+
+    @Test
     func testPartialFailureRetainsLastSuccessAndOtherAccountUpdates() async throws {
         let first = try status("a")
         let loader = FixtureLoader([first, try status("b")])

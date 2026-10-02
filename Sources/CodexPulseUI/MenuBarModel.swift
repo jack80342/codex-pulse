@@ -34,6 +34,7 @@ public struct MenuAccountRow: Identifiable, Sendable {
 public final class MenuBarModel: ObservableObject {
     @Published public private(set) var rows: [MenuAccountRow] = []
     @Published public private(set) var isRefreshing = false
+    @Published public private(set) var isManagingAccounts = false
     @Published public private(set) var globalError: String?
     @Published public private(set) var lastCompletedAt: Date?
     @Published public private(set) var automaticResults: [String: AutomaticRequestResult] = [:]
@@ -87,7 +88,7 @@ public final class MenuBarModel: ObservableObject {
     }
 
     public func refresh() async {
-        guard !isRefreshing, !isSleeping else { return }
+        guard !isRefreshing, !isSleeping, !isManagingAccounts else { return }
         started = true
         isRefreshing = true
         globalError = nil
@@ -111,8 +112,9 @@ public final class MenuBarModel: ObservableObject {
                 row.account = account
                 return row
             }
-            automaticResults = automaticResults.filter { key, _ in accounts.contains { $0.id == key } }
-            if accounts.isEmpty { return }
+            let accountIDs = Set(accounts.map(\.id))
+            automaticResults = automaticResults.filter { accountIDs.contains($0.key) }
+            if accounts.isEmpty { lastCompletedAt = now(); return }
             let statuses = try await readStatuses()
             let current = Dictionary(uniqueKeysWithValues: statuses.map { ($0.account.id, $0) })
             rows = accounts.map { account in
@@ -126,7 +128,7 @@ public final class MenuBarModel: ObservableObject {
                     }
                     row.lastUsername = username
                 }
-                else if row.status?.state == "notLoggedIn" { row.lastUsername = nil }
+                else if row.status?.state == "notLoggedIn" { row.lastUsername = nil; row.lastSnapshot = nil }
                 if let oldIdentity = row.lastSnapshot?.identityDigest, let newIdentity = row.status?.snapshot?.identityDigest,
                    oldIdentity != newIdentity, row.status?.username == nil { row.lastUsername = nil }
                 if let snapshot = row.status?.snapshot {
@@ -162,6 +164,35 @@ public final class MenuBarModel: ObservableObject {
         }
     }
 
+    public func beginAccountManagement() -> Bool {
+        guard !isRefreshing, !isManagingAccounts else { return false }
+        isManagingAccounts = true
+        timer?.invalidate()
+        timer = nil
+        nextAutomaticCheckAt = nil
+        return true
+    }
+
+    public func showRegisteredAccount(_ account: ManagedAccount) {
+        rows.append(MenuAccountRow(account: account))
+    }
+
+    public func removeRegisteredAccount(id: String) {
+        rows.removeAll { $0.id == id }
+        automaticResults.removeValue(forKey: id)
+    }
+
+    public func clearAccountCache(id: String) {
+        guard let index = rows.firstIndex(where: { $0.id == id }) else { return }
+        rows[index] = MenuAccountRow(account: rows[index].account)
+        automaticResults.removeValue(forKey: id)
+    }
+
+    public func endAccountManagement() async {
+        isManagingAccounts = false
+        await refresh()
+    }
+
     public func suspendForSleep() {
         isSleeping = true
         timer?.invalidate()
@@ -179,7 +210,7 @@ public final class MenuBarModel: ObservableObject {
         timer?.invalidate()
         timer = nil
         nextAutomaticCheckAt = nil
-        guard runAutomatic != nil, !isSleeping else { return }
+        guard runAutomatic != nil, !isSleeping, !isManagingAccounts else { return }
         let date = now()
         guard let next = automaticResults.values.compactMap(\.nextRequestAt).filter({ $0 > date }).min() else { return }
         nextAutomaticCheckAt = next
@@ -201,7 +232,7 @@ public final class MenuBarModel: ObservableObject {
     private static func message(_ error: Error) -> String {
         if let error = error as? AccountError { return error.description }
         if let error = error as? ProbeError {
-            if case .codexNotInstalled = error { return "未找到本机 Codex CLI。安装后请点击刷新。" }
+            if case .codexNotInstalled = error { return "未找到本机 Codex CLI。请安装后重新检测。" }
             return error.description
         }
         return "本次查询失败，请稍后重试；上次成功的数据已保留。"

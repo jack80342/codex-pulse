@@ -7,7 +7,7 @@ func emit(_ text: String) {
 }
 
 let usage = """
-Codex Pulse 三账号管理工具
+Codex Pulse 多账号管理工具（账号数量不限）
 用法：codex-pulse accounts <add|list|rename|remove|login|status> [选项]
   add --name <显示别名> [--id <固定ID>]    默认生成 UUID；可用 probe-1 接入已有独立验证账号
   list                                  读取本地列表，不查询服务端

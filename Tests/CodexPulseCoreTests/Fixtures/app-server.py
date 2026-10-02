@@ -6,6 +6,8 @@ import time
 from pathlib import Path
 
 mode = sys.argv[1]
+if mode == "executable-path":
+    assert os.environ["PATH"].split(":")[0] == sys.argv[2]
 reset = int(time.time()) + 18000
 requested = False
 quota_reads = 0
@@ -52,6 +54,11 @@ for line in sys.stdin:
         sys.stderr.flush()
     if method == "account/read":
         result = {"account": {"type": "chatgpt", "email": "probe@example.invalid", "planType": "plus"} if logged_in else None}
+    elif method == "account/logout":
+        assert request["params"] is None
+        logged_in = False
+        marker.unlink(missing_ok=True)
+        result = {}
     elif method == "account/login/start":
         result = {"type": "chatgpt", "loginId": "login-test", "authUrl": "https://auth.openai.com/test"}
         if mode == "login-invalid-url":
@@ -118,3 +125,7 @@ for line in sys.stdin:
     else:
         result = {"echo": method}
     send({"id": identifier, "result": result})
+
+if mode == "slow-close":
+    (home / "fixture-closing").write_text("closing")
+    time.sleep(0.2)

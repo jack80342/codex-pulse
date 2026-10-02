@@ -2,13 +2,20 @@ import CodexPulseCore
 import SwiftUI
 import AppKit
 
+// 使用传统 State 包装器，避免 CLT SDK 同名宏需要缺失的 SwiftUIMacros 插件。
+private typealias ViewState<Value> = SwiftUI.State<Value>
+
 public struct MenuBarPanel: View {
     @ObservedObject private var model: MenuBarModel
     @ObservedObject private var loginItem: LoginItemModel
+    @ObservedObject private var accounts: AccountManagementModel
+    @ViewState private var managing = false
 
-    public init(model: MenuBarModel, loginItem: LoginItemModel = LoginItemModel()) {
+    public init(model: MenuBarModel, loginItem: LoginItemModel = LoginItemModel(),
+                accounts: AccountManagementModel? = nil) {
         self.model = model
         self.loginItem = loginItem
+        self.accounts = accounts ?? AccountManagementModel.live(menu: model)
     }
 
     public var body: some View {
@@ -28,24 +35,34 @@ public struct MenuBarPanel: View {
                 Label(error, systemImage: "exclamationmark.triangle")
                     .font(.caption).foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true)
             }
-            if model.rows.isEmpty && !model.isRefreshing && model.globalError == nil {
-                ContentUnavailableView("尚未添加账号", systemImage: "person.crop.circle.badge.plus",
-                                       description: Text("添加账号后，额度会显示在这里。"))
-            } else {
-                ScrollView {
-                    VStack(spacing: 10) {
-                        ForEach(model.rows) { row in
-                            AccountCard(row: row, refreshing: model.isRefreshing,
-                                        automatic: model.automaticResults[row.id], runningAutomatic: model.isRunningAutomatic)
+            if !managing {
+                if model.rows.isEmpty && !model.isRefreshing && model.globalError == nil {
+                    ContentUnavailableView("尚未添加账号", systemImage: "person.crop.circle.badge.plus",
+                                           description: Text("添加账号后，额度会显示在这里。"))
+                    Button("添加第一个账号") {
+                        managing = true
+                        if accounts.executablePath != nil { Task { await accounts.add() } }
+                    }
+                    .disabled(accounts.isBusy)
+                } else {
+                    ScrollView {
+                        LazyVStack(spacing: 10) {
+                            ForEach(model.rows) { row in
+                                AccountCard(row: row, refreshing: model.isRefreshing,
+                                            automatic: model.automaticResults[row.id], runningAutomatic: model.isRunningAutomatic)
+                            }
                         }
                     }
+                    .frame(maxHeight: 440)
+                    .fixedSize(horizontal: false, vertical: true)
                 }
-                .frame(maxHeight: 580)
-                .fixedSize(horizontal: false, vertical: true)
             }
             if !model.duplicateNames.isEmpty {
                 Label("\(model.duplicateNames.joined(separator: "、"))使用同一账号，额度共享。", systemImage: "person.2")
                     .font(.caption).foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true)
+            }
+            DisclosureGroup("添加 / 管理账号", isExpanded: $managing) {
+                AccountManagementPanel(accounts: accounts, menu: model).padding(.top, 8)
             }
             Divider()
             Toggle("登录时启动", isOn: Binding(get: { loginItem.isEnabled }, set: { enabled in
@@ -53,16 +70,13 @@ public struct MenuBarPanel: View {
             }))
                 .toggleStyle(.switch).controlSize(.small)
                 .disabled(loginItem.isChanging || !loginItem.isInstalled)
-            if !loginItem.isInstalled {
-                Text("安装到应用程序目录后可设置登录启动。")
-                    .font(.caption2).foregroundStyle(.secondary)
-            } else if loginItem.status == .requiresApproval {
+            if loginItem.isInstalled && loginItem.status == .requiresApproval {
                 HStack {
                     Text("登录启动等待系统批准").font(.caption2).foregroundStyle(.orange)
                     Spacer()
                     Button("前往系统设置") { loginItem.openSettings() }.controlSize(.small)
                 }
-            } else if loginItem.status == .notFound {
+            } else if loginItem.isInstalled && loginItem.status == .notFound {
                 Text("系统找不到登录项，请重新安装应用。")
                     .font(.caption2).foregroundStyle(.orange)
             }
@@ -73,7 +87,7 @@ public struct MenuBarPanel: View {
                 Button {
                     Task { await model.refresh() }
                 } label: { Label("立即刷新", systemImage: "arrow.clockwise") }
-                .disabled(model.isRefreshing)
+                .disabled(model.isRefreshing || accounts.isBusy)
                 .keyboardShortcut("r", modifiers: .command)
                 Spacer()
                 Button("退出") { NSApplication.shared.terminate(nil) }
@@ -86,9 +100,10 @@ public struct MenuBarPanel: View {
         }
         .padding(18)
         .frame(width: 390)
-        .task { loginItem.refresh(); await model.startIfNeeded() }
+        .task { accounts.checkExecutable(); loginItem.refresh(); await model.startIfNeeded() }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             loginItem.refresh()
+            accounts.checkExecutable()
         }
     }
 }
