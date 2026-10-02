@@ -21,6 +21,7 @@ if [ ! -d "$codex_pulse_resources" ]; then
     exit 1
 fi
 mkdir -p "$codex_pulse_bundle/Contents/Resources"
+cp Resources/AppIcon.icns "$codex_pulse_bundle/Contents/Resources/AppIcon.icns"
 ditto "$codex_pulse_resources" "$codex_pulse_bundle/Contents/Resources/CodexPulse_CodexPulseCore.bundle"
 cp LICENSE "$codex_pulse_bundle/Contents/Resources/LICENSE"
 codesign --force --sign - "$codex_pulse_bundle"
