@@ -45,6 +45,6 @@ Apple 流程参考：[自定义公证工作流](https://developer.apple.com/docu
 
 ## 当前进度（2026-10-02）
 
-正式分发脚本已准备。当前本机检查仅发现 Apple Development 证书；Developer ID Application 证书与公证钥匙串配置待提供。尚未执行真实 Developer ID 签名、Apple 公证或重新发布正式安装包。
+已在 Apple Developer 团队 `766AV76B44` 创建并导入 Developer ID Application（G2）证书，私钥保留于本机钥匙串。`0.7.1`（构建号 11）已完成真实 Developer ID 签名，Hardened Runtime、安全时间戳与签名校验通过。公证钥匙串配置 `codex-pulse-notary` 待配置；尚未提交 Apple 公证或重新发布正式安装包。
 
 已通过：脚本语法与差异检查，缺少参数或无效证书时在构建和提交前停止，release 构建、DMG 完整性及挂载后应用签名检查，语言资源、许可证与无账号凭据打包检查，以及 99 项自动化测试。该验收包为本地 ad-hoc 签名，仅用于验证打包流程。
