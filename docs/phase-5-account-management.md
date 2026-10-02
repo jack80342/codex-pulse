@@ -60,6 +60,20 @@
 
 本次修复文件：`Sources/CodexPulseUI/MenuBarPanel.swift`、新增 `Sources/CodexPulseUI/MenuBarWindowSizer.swift`、新增 `Tests/CodexPulseUITests/MenuBarWindowSizeTests.swift`、`Resources/Info.plist`、`docs/design-plan.md`、本文档，以及同步更新的原方案 `/Users/j/Desktop/work/Codex多账号额度小组件推荐方案.md`。
 
+## 0.6.2：确认操作留在管理面板内
+
+用户实际反馈：删除弹窗可显示，但点击“取消”或“删除”后菜单栏面板消失，操作不能正常完成。检查现有流程，删除仅在确认回调中执行；反馈后核对原三个账号条目仍完整保留。将这条失效的 SwiftUI `.alert` 交互路径替换为管理面板内的确认区，删除与重新登录共用相同处理方式。
+
+取消只清除待确认状态并返回账号列表；确认前不会退出登录或删除条目，确认后仍调用原服务处理所选固定 ID。确认期间禁止新增及切换目标条目，取消始终可用，确认按钮在账号操作或刷新时暂停。保留原有错误处理、目录删除范围和后台调度行为。
+
+- 全部 92 项测试通过（核心 55、UI 37），应用编译、构建、安装和打包通过。
+- 独立宿主以演示数据渲染删除和重新登录确认区，标题、说明及两个按钮完整显示；尺寸均为 390 × 405 个逻辑像素，窗口随内容调整。此检查没有执行确认按钮，也没有操作真实账号。
+- 已安装并重新启动 0.6.2 / build 9，关闭旧模态弹窗；原账号列表摘要未改变。DMG 的校验、签名、版本及可执行文件与安装版本一致。
+
+真实 MenuBarExtra 的点击行为仍需用户确认。先在原账号的删除确认区仅点“取消”，确认返回列表；随后用临时条目验收取消登录及确认删除。浏览器登录、重复身份提示等剩余实际验收仍未完成。
+
+本次修复文件：`Sources/CodexPulseUI/AccountManagementPanel.swift`、`Resources/Info.plist`、`docs/design-plan.md`、本文档，以及同步更新的原方案 `/Users/j/Desktop/work/Codex多账号额度小组件推荐方案.md`。
+
 ## 本次修改文件
 
 - `Sources/CodexPulseCore/AccountStore.swift`

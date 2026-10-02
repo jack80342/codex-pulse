@@ -7,7 +7,6 @@ struct AccountManagementPanel: View {
     @ObservedObject var accounts: AccountManagementModel
     @ObservedObject var menu: MenuBarModel
     @ViewState private var confirmation: Confirmation?
-    @ViewState private var showingConfirmation = false
 
     private struct Confirmation {
         let row: MenuAccountRow
@@ -27,10 +26,10 @@ struct AccountManagementPanel: View {
                         accounts.checkExecutable()
                         Task { await menu.refresh() }
                     }.disabled(disabled)
-                }.font(.caption)
+                }.font(.caption).disabled(confirmation != nil)
             }
             Button("添加账号") { Task { await accounts.add() } }
-                .disabled(disabled || accounts.executablePath == nil)
+                .disabled(disabled || accounts.executablePath == nil || confirmation != nil)
             Text("在浏览器中确认目标账号。登录后自动读取真实用户名及额度，并启用符合条件账号的最小请求调度；请求会消耗额度。")
                 .font(.caption2).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             if let message = accounts.message {
@@ -45,7 +44,27 @@ struct AccountManagementPanel: View {
                     Button("取消登录") { accounts.cancelLogin() }.controlSize(.small)
                 }
             }
-            if !menu.rows.isEmpty {
+            if let target = confirmation {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text(target.removing ? "删除本地账号？" : "重新登录账号？").font(.headline)
+                    Text(target.removing
+                         ? "将删除 \(target.row.displayName) 在本工具中的登录数据并停止调度，保留历史验证报告。不会删除 ChatGPT 账号。"
+                         : "将退出 \(target.row.displayName) 在本工具中的当前登录，再打开浏览器授权。取消或失败后可重试登录。")
+                        .font(.caption).fixedSize(horizontal: false, vertical: true)
+                    HStack {
+                        Spacer()
+                        Button("取消", role: .cancel) { confirmation = nil }
+                        Button(target.removing ? "删除" : "重新登录", role: .destructive) {
+                            confirmation = nil
+                            Task {
+                                if target.removing { await accounts.remove(id: target.row.id) }
+                                else { await accounts.login(id: target.row.id, force: true) }
+                            }
+                        }.disabled(disabled)
+                    }
+                }
+                .padding(12).background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
+            } else if !menu.rows.isEmpty {
                 ScrollView {
                     LazyVStack(spacing: 8) {
                         ForEach(menu.rows) { row in
@@ -61,13 +80,11 @@ struct AccountManagementPanel: View {
                                             Task { await accounts.login(id: row.id) }
                                         } else {
                                             confirmation = Confirmation(row: row, removing: false)
-                                            showingConfirmation = true
                                         }
                                     }
                                 }
                                 Button(row.account.pendingDeletion ? "重试删除" : "删除", role: .destructive) {
                                     confirmation = Confirmation(row: row, removing: true)
-                                    showingConfirmation = true
                                 }
                             }
                             .controlSize(.small).disabled(disabled)
@@ -78,19 +95,5 @@ struct AccountManagementPanel: View {
             }
         }
         .onAppear { accounts.checkExecutable() }
-        .alert(confirmation?.removing == true ? "删除本地账号？" : "重新登录账号？",
-               isPresented: $showingConfirmation, presenting: confirmation) { target in
-            Button("取消", role: .cancel) {}
-            Button(target.removing ? "删除" : "重新登录", role: .destructive) {
-                Task {
-                    if target.removing { await accounts.remove(id: target.row.id) }
-                    else { await accounts.login(id: target.row.id, force: true) }
-                }
-            }
-        } message: { target in
-            Text(target.removing
-                 ? "将删除 \(target.row.displayName) 在本工具中的登录数据并停止调度，保留历史验证报告。不会删除 ChatGPT 账号。"
-                 : "将退出 \(target.row.displayName) 在本工具中的当前登录，再打开浏览器授权。取消或失败后可重试登录。")
-        }
     }
 }
