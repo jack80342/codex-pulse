@@ -11,23 +11,36 @@ public final class LoginItemModel: ObservableObject {
     private let readStatus: () -> SMAppService.Status
     private let register: () throws -> Void
     private let unregister: () async throws -> Void
+    private let readDefaultApplied: () -> Bool
+    private let saveDefaultApplied: () -> Void
 
     public init(
         isInstalled: Bool = Bundle.main.bundleURL.resolvingSymlinksInPath().path == "/Applications/Codex Pulse.app",
         readStatus: @escaping () -> SMAppService.Status = { SMAppService.mainApp.status },
         register: @escaping () throws -> Void = { try SMAppService.mainApp.register() },
-        unregister: @escaping () async throws -> Void = { try await SMAppService.mainApp.unregister() }
+        unregister: @escaping () async throws -> Void = { try await SMAppService.mainApp.unregister() },
+        readDefaultApplied: @escaping () -> Bool = { UserDefaults.standard.bool(forKey: "loginItemDefaultApplied") },
+        saveDefaultApplied: @escaping () -> Void = { UserDefaults.standard.set(true, forKey: "loginItemDefaultApplied") }
     ) {
         self.isInstalled = isInstalled
         self.readStatus = readStatus
         self.register = register
         self.unregister = unregister
+        self.readDefaultApplied = readDefaultApplied
+        self.saveDefaultApplied = saveDefaultApplied
         status = readStatus()
     }
 
     public var isEnabled: Bool { status == .enabled || status == .requiresApproval }
 
     public func refresh() { status = readStatus() }
+
+    public func applyDefaultIfNeeded() async {
+        guard isInstalled, !isChanging, !readDefaultApplied() else { return }
+        // 只在首次正式运行时尝试，避免覆盖用户后来关闭的系统登录项。
+        saveDefaultApplied()
+        await setEnabled(true)
+    }
 
     public func setEnabled(_ enabled: Bool) async {
         guard !isChanging else { return }
@@ -36,6 +49,7 @@ public final class LoginItemModel: ObservableObject {
             error = "请先将 Codex Pulse 安装到应用程序目录。"
             return
         }
+        if !readDefaultApplied() { saveDefaultApplied() }
         refresh()
         guard enabled != isEnabled else { return }
         isChanging = true

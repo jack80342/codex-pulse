@@ -4,9 +4,12 @@ import AppKit
 
 public struct MenuBarPanel: View {
     @ObservedObject private var model: MenuBarModel
-    @StateObject private var loginItem = LoginItemModel()
+    @ObservedObject private var loginItem: LoginItemModel
 
-    public init(model: MenuBarModel) { self.model = model }
+    public init(model: MenuBarModel, loginItem: LoginItemModel = LoginItemModel()) {
+        self.model = model
+        self.loginItem = loginItem
+    }
 
     public var body: some View {
         VStack(alignment: .leading, spacing: 14) {

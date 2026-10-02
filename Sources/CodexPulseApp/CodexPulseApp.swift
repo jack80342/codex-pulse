@@ -5,6 +5,7 @@ import AppKit
 @MainActor
 final class ApplicationDelegate: NSObject, NSApplicationDelegate {
     static let model = MenuBarModel.live()
+    static let loginItem = LoginItemModel()
     private var workspaceObservers: [NSObjectProtocol] = []
     private var clockObserver: NSObjectProtocol?
 
@@ -20,7 +21,10 @@ final class ApplicationDelegate: NSObject, NSApplicationDelegate {
         clockObserver = NotificationCenter.default.addObserver(forName: .NSSystemClockDidChange, object: nil, queue: .main) { _ in
             Task { @MainActor in await model.resumeAfterWake() }
         }
-        Task { await Self.model.startIfNeeded() }
+        Task {
+            await Self.loginItem.applyDefaultIfNeeded()
+            await Self.model.startIfNeeded()
+        }
     }
 }
 
@@ -31,7 +35,7 @@ struct CodexPulseApp: App {
 
     var body: some Scene {
         MenuBarExtra("Codex Pulse", systemImage: "waveform.path.ecg") {
-            MenuBarPanel(model: model)
+            MenuBarPanel(model: model, loginItem: ApplicationDelegate.loginItem)
         }
         .menuBarExtraStyle(.window)
     }

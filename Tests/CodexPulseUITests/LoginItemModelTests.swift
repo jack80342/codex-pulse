@@ -10,6 +10,7 @@ private final class LoginItemFixture {
     var removals = 0
     var approvalRequired = false
     var fails = false
+    var defaultApplied = false
 
     func model(installed: Bool = true) -> LoginItemModel {
         LoginItemModel(isInstalled: installed, readStatus: { self.status }, register: {
@@ -20,12 +21,81 @@ private final class LoginItemFixture {
             self.removals += 1
             if self.fails { throw NSError(domain: "test", code: 43) }
             self.status = .notRegistered
-        })
+        }, readDefaultApplied: { self.defaultApplied }, saveDefaultApplied: { self.defaultApplied = true })
     }
 }
 
 @MainActor
 struct LoginItemModelTests {
+    @Test
+    func firstInstalledLaunchEnablesOnceAndRestartKeepsManualOff() async {
+        let fixture = LoginItemFixture()
+        let model = fixture.model()
+        await model.applyDefaultIfNeeded()
+        #expect(model.status == .enabled)
+        #expect(fixture.defaultApplied)
+        await model.applyDefaultIfNeeded()
+        #expect(fixture.registrations == 1)
+        await model.setEnabled(false)
+        let restarted = fixture.model()
+        await restarted.applyDefaultIfNeeded()
+        #expect(!restarted.isEnabled)
+        #expect(fixture.registrations == 1)
+    }
+
+    @Test
+    func systemDisabledLoginItemIsNotReenabledOnLaterLaunch() async {
+        let fixture = LoginItemFixture()
+        await fixture.model().applyDefaultIfNeeded()
+        fixture.status = .notRegistered
+        await fixture.model().applyDefaultIfNeeded()
+        #expect(fixture.status == .notRegistered)
+        #expect(fixture.registrations == 1)
+    }
+
+    @Test
+    func firstLaunchDefaultCanWaitForApprovalWithoutRegisteringTwice() async {
+        let fixture = LoginItemFixture()
+        fixture.approvalRequired = true
+        await fixture.model().applyDefaultIfNeeded()
+        #expect(fixture.status == .requiresApproval)
+        await fixture.model().applyDefaultIfNeeded()
+        #expect(fixture.registrations == 1)
+    }
+
+    @Test
+    func existingEnabledLoginItemIsNotRegisteredAgain() async {
+        let fixture = LoginItemFixture()
+        fixture.status = .enabled
+        await fixture.model().applyDefaultIfNeeded()
+        #expect(fixture.registrations == 0)
+        #expect(fixture.defaultApplied)
+    }
+
+    @Test
+    func developmentLaunchDoesNotConsumeDefaultInitialization() async {
+        let fixture = LoginItemFixture()
+        await fixture.model(installed: false).applyDefaultIfNeeded()
+        #expect(!fixture.defaultApplied)
+        #expect(fixture.registrations == 0)
+        await fixture.model().applyDefaultIfNeeded()
+        #expect(fixture.registrations == 1)
+    }
+
+    @Test
+    func initialFailureIsReportedAndManualRetryRemainsAvailable() async {
+        let fixture = LoginItemFixture()
+        fixture.fails = true
+        let model = fixture.model()
+        await model.applyDefaultIfNeeded()
+        #expect(!model.isEnabled && model.error != nil)
+        await model.applyDefaultIfNeeded()
+        #expect(fixture.registrations == 1)
+        fixture.fails = false
+        await model.setEnabled(true)
+        #expect(model.isEnabled && model.error == nil)
+    }
+
     @Test
     func systemStatusControlsSwitchAndExternalChangesAreReflected() async {
         let fixture = LoginItemFixture()
@@ -86,7 +156,8 @@ struct LoginItemModelTests {
 
     @Test
     func unsuccessfulSystemTransitionDoesNotPretendItSucceeded() async {
-        let model = LoginItemModel(isInstalled: true, readStatus: { .notRegistered }, register: {}, unregister: {})
+        let model = LoginItemModel(isInstalled: true, readStatus: { .notRegistered }, register: {}, unregister: {},
+                                   readDefaultApplied: { false }, saveDefaultApplied: {})
         await model.setEnabled(true)
         #expect(!model.isEnabled)
         #expect(model.error != nil)
