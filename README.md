@@ -9,6 +9,7 @@ Codex Pulse is a macOS menu bar app for managing multiple Codex accounts. It dis
 - View real usernames, plans, remaining five-hour and weekly quotas, and reset times.
 - Add, log in, reauthenticate, or remove accounts in the app, with no account count limit.
 - Refresh manually, restore scheduling after restart or wake, and enable launch at login.
+- Use Chinese or English, selected automatically from macOS preferred languages on launch.
 
 The app runs on macOS 14 or later and automatically locates an installed Codex CLI.
 

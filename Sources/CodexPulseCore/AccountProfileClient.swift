@@ -6,11 +6,11 @@ public enum ProfileError: Error, CustomStringConvertible {
 
     public var description: String {
         switch self {
-        case .credentialsUnavailable: "无法读取此账号的独立登录凭据。"
-        case .invalidResponse: "资料接口未返回有效用户名。"
-        case .timeout: "账号资料查询超时。"
-        case .transport: "账号资料连接失败，请稍后刷新。"
-        case .http(let status): "账号资料查询失败（HTTP \(status)）。"
+        case .credentialsUnavailable: PulseLocalization.text("error.profile.credentials")
+        case .invalidResponse: PulseLocalization.text("error.profile.invalidResponse")
+        case .timeout: PulseLocalization.text("error.profile.timeout")
+        case .transport: PulseLocalization.text("error.profile.transport")
+        case .http(let status): PulseLocalization.text("error.profile.http", status)
         }
     }
 }

@@ -1,3 +1,4 @@
+import CodexPulseCore
 import SwiftUI
 
 // 使用传统 State 包装器，避免 CLT SDK 同名宏需要缺失的 SwiftUIMacros 插件。
@@ -18,19 +19,19 @@ struct AccountManagementPanel: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             if accounts.executablePath == nil {
-                Text("未找到本机 Codex CLI，请安装后重新检测。")
+                Text(PulseLocalization.text("account.cliMissing"))
                     .font(.caption).foregroundStyle(.orange)
                 HStack {
-                    Link("安装说明", destination: URL(string: "https://github.com/openai/codex#installing-and-running-codex-cli")!)
-                    Button("重新检测") {
+                    Link(PulseLocalization.text("account.installGuide"), destination: URL(string: "https://github.com/openai/codex#installing-and-running-codex-cli")!)
+                    Button(PulseLocalization.text("account.detectAgain")) {
                         accounts.checkExecutable()
                         Task { await menu.refresh() }
                     }.disabled(disabled)
                 }.font(.caption).disabled(confirmation != nil)
             }
-            Button("添加账号") { Task { await accounts.add() } }
+            Button(PulseLocalization.text("account.add")) { Task { await accounts.add() } }
                 .disabled(disabled || accounts.executablePath == nil || confirmation != nil)
-            Text("在浏览器中确认目标账号。登录后自动读取真实用户名及额度，并启用符合条件账号的最小请求调度；请求会消耗额度。")
+            Text(PulseLocalization.text("account.loginGuide"))
                 .font(.caption2).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             if let message = accounts.message {
                 Text(message).font(.caption).fixedSize(horizontal: false, vertical: true)
@@ -41,20 +42,20 @@ struct AccountManagementPanel: View {
             if accounts.isLoggingIn {
                 HStack {
                     ProgressView().controlSize(.small)
-                    Button("取消登录") { accounts.cancelLogin() }.controlSize(.small)
+                    Button(PulseLocalization.text("account.cancelLogin")) { accounts.cancelLogin() }.controlSize(.small)
                 }
             }
             if let target = confirmation {
                 VStack(alignment: .leading, spacing: 10) {
-                    Text(target.removing ? "删除本地账号？" : "重新登录账号？").font(.headline)
+                    Text(target.removing ? PulseLocalization.text("account.deleteTitle") : PulseLocalization.text("account.reloginTitle")).font(.headline)
                     Text(target.removing
-                         ? "将删除 \(target.row.displayName) 在本工具中的登录数据并停止调度，保留历史验证报告。不会删除 ChatGPT 账号。"
-                         : "将退出 \(target.row.displayName) 在本工具中的当前登录，再打开浏览器授权。取消或失败后可重试登录。")
+                         ? PulseLocalization.text("account.deleteDescription", target.row.displayName)
+                         : PulseLocalization.text("account.reloginDescription", target.row.displayName))
                         .font(.caption).fixedSize(horizontal: false, vertical: true)
                     HStack {
                         Spacer()
-                        Button("取消", role: .cancel) { confirmation = nil }
-                        Button(target.removing ? "删除" : "重新登录", role: .destructive) {
+                        Button(PulseLocalization.text("account.cancel"), role: .cancel) { confirmation = nil }
+                        Button(target.removing ? PulseLocalization.text("account.delete") : PulseLocalization.text("account.relogin"), role: .destructive) {
                             confirmation = nil
                             Task {
                                 if target.removing { await accounts.remove(id: target.row.id) }
@@ -75,7 +76,7 @@ struct AccountManagementPanel: View {
                                 }
                                 Spacer()
                                 if !row.account.pendingDeletion {
-                                    Button(row.status?.state == "notLoggedIn" || row.status == nil ? "登录" : "重新登录") {
+                                    Button(row.status?.state == "notLoggedIn" || row.status == nil ? PulseLocalization.text("account.login") : PulseLocalization.text("account.relogin")) {
                                         if row.status?.state == "notLoggedIn" || row.status == nil {
                                             Task { await accounts.login(id: row.id) }
                                         } else {
@@ -83,7 +84,7 @@ struct AccountManagementPanel: View {
                                         }
                                     }
                                 }
-                                Button(row.account.pendingDeletion ? "重试删除" : "删除", role: .destructive) {
+                                Button(row.account.pendingDeletion ? PulseLocalization.text("account.retryDelete") : PulseLocalization.text("account.delete"), role: .destructive) {
                                     confirmation = Confirmation(row: row, removing: true)
                                 }
                             }

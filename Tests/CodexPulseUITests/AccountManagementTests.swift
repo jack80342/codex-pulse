@@ -65,6 +65,18 @@ private actor ManagementLoginGate {
 
 @MainActor
 struct AccountManagementTests {
+    @Test
+    func generatedPendingLabelsAreLocalizedWithoutChangingTheStoredName() async {
+        let id = "a1234567-b123-4123-8123-a12345678901"
+        let account = ManagedAccount(id: id, name: id, usesGeneratedName: true)
+        let menu = MenuBarModel(readAccounts: { [account] }, readStatuses: {
+            [AccountStatus(account: account, state: "notLoggedIn", snapshot: nil, error: nil)]
+        })
+        await menu.refresh()
+        #expect(menu.rows.first?.displayName == PulseLocalization.text("account.pendingName", "a1234567"))
+        #expect(menu.rows.first?.account.name == id)
+    }
+
     private func menu(_ fixture: ManagementFixture) -> MenuBarModel {
         MenuBarModel(readAccounts: { await fixture.list() }, readStatuses: { await fixture.statuses() },
                      runAutomatic: { _ in await fixture.automatic() })
@@ -109,7 +121,7 @@ struct AccountManagementTests {
         #expect(manager.executablePath == nil)
         await manager.add()
         #expect(await fixture.list().isEmpty)
-        #expect(manager.error?.contains("安装") == true)
+        #expect(manager.error == PulseLocalization.text("account.cliMissing"))
         #expect(!manager.isBusy)
     }
 
@@ -123,7 +135,7 @@ struct AccountManagementTests {
         #expect(manager.error != nil)
         #expect(menu.rows.count == 1)
         #expect(menu.rows[0].account.name == "待登录账号 1")
-        #expect(menu.rows[0].statusText == "未登录")
+        #expect(menu.rows[0].statusText == PulseLocalization.text("status.notLoggedIn"))
         let id = try #require(menu.rows.first?.id)
         await manager.remove(id: id)
         #expect(menu.rows.isEmpty)
@@ -148,9 +160,9 @@ struct AccountManagementTests {
         await gate.finish()
         await running.value
         #expect(manager.error == nil)
-        #expect(manager.message?.contains("已取消") == true)
+        #expect(manager.message == PulseLocalization.text("account.loginCancelled"))
         #expect(!manager.isBusy && !menu.isManagingAccounts)
-        #expect(menu.rows[0].statusText == "未登录")
+        #expect(menu.rows[0].statusText == PulseLocalization.text("status.notLoggedIn"))
     }
 
     @Test
@@ -175,7 +187,7 @@ struct AccountManagementTests {
         let id = try #require(menu.rows.first?.id)
         await manager.remove(id: id)
         #expect(menu.rows.count == 1)
-        #expect(manager.error?.contains("使用") == true)
+        #expect(manager.error == AccountError.busy.description)
         #expect(menu.nextAutomaticCheckAt != nil)
     }
 

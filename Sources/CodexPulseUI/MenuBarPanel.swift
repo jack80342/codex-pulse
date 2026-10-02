@@ -18,6 +18,12 @@ public struct MenuBarPanel: View {
         self.accounts = accounts ?? AccountManagementModel.live(menu: model)
     }
 
+    private var headerStatus: String {
+        if model.isRunningAutomatic { return PulseLocalization.text("ui.checkingAutomatic") }
+        if model.isRefreshing { return PulseLocalization.text("ui.readingQuota") }
+        return PulseLocalization.text(model.rows.count == 1 ? "ui.accounts.one" : "ui.accounts.many", model.rows.count)
+    }
+
     public var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 10) {
@@ -25,7 +31,7 @@ public struct MenuBarPanel: View {
                     .font(.title2).foregroundStyle(.tint)
                 VStack(alignment: .leading, spacing: 3) {
                     Text("Codex Pulse").font(.headline)
-                    Text(model.isRunningAutomatic ? "正在检查自动请求…" : (model.isRefreshing ? "正在读取账号额度…" : "\(model.rows.count) 个账号"))
+                    Text(headerStatus)
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
@@ -37,9 +43,9 @@ public struct MenuBarPanel: View {
             }
             if !managing {
                 if model.rows.isEmpty && !model.isRefreshing && model.globalError == nil {
-                    ContentUnavailableView("尚未添加账号", systemImage: "person.crop.circle.badge.plus",
-                                           description: Text("添加账号后，额度会显示在这里。"))
-                    Button("添加第一个账号") {
+                    ContentUnavailableView(PulseLocalization.text("ui.noAccounts"), systemImage: "person.crop.circle.badge.plus",
+                                           description: Text(PulseLocalization.text("ui.noAccountsDescription")))
+                    Button(PulseLocalization.text("ui.addFirst")) {
                         managing = true
                         if accounts.executablePath != nil { Task { await accounts.add() } }
                     }
@@ -58,26 +64,26 @@ public struct MenuBarPanel: View {
                 }
             }
             if !model.duplicateNames.isEmpty {
-                Label("\(model.duplicateNames.joined(separator: "、"))使用同一账号，额度共享。", systemImage: "person.2")
+                Label(PulseLocalization.text("ui.duplicates", model.duplicateNames.joined(separator: PulseLocalization.text("status.nameSeparator"))), systemImage: "person.2")
                     .font(.caption).foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true)
             }
-            DisclosureGroup("管理账号", isExpanded: $managing) {
+            DisclosureGroup(PulseLocalization.text("ui.manageAccounts"), isExpanded: $managing) {
                 AccountManagementPanel(accounts: accounts, menu: model).padding(.top, 8)
             }
             Divider()
-            Toggle("登录时启动", isOn: Binding(get: { loginItem.isEnabled }, set: { enabled in
+            Toggle(PulseLocalization.text("ui.launchAtLogin"), isOn: Binding(get: { loginItem.isEnabled }, set: { enabled in
                 Task { await loginItem.setEnabled(enabled) }
             }))
                 .toggleStyle(.switch).controlSize(.small)
                 .disabled(loginItem.isChanging || !loginItem.isInstalled)
             if loginItem.isInstalled && loginItem.status == .requiresApproval {
                 HStack {
-                    Text("登录启动等待系统批准").font(.caption2).foregroundStyle(.orange)
+                    Text(PulseLocalization.text("ui.loginApproval")).font(.caption2).foregroundStyle(.orange)
                     Spacer()
-                    Button("前往系统设置") { loginItem.openSettings() }.controlSize(.small)
+                    Button(PulseLocalization.text("ui.openSettings")) { loginItem.openSettings() }.controlSize(.small)
                 }
             } else if loginItem.isInstalled && loginItem.status == .notFound {
-                Text("系统找不到登录项，请重新安装应用。")
+                Text(PulseLocalization.text("ui.loginItemMissing"))
                     .font(.caption2).foregroundStyle(.orange)
             }
             if let error = loginItem.error {
@@ -86,21 +92,22 @@ public struct MenuBarPanel: View {
             HStack {
                 Button {
                     Task { await model.refresh() }
-                } label: { Label("立即刷新", systemImage: "arrow.clockwise") }
+                } label: { Label(PulseLocalization.text("ui.refresh"), systemImage: "arrow.clockwise") }
                 .disabled(model.isRefreshing || accounts.isBusy)
                 .keyboardShortcut("r", modifiers: .command)
                 Spacer()
-                Button("退出") { NSApplication.shared.terminate(nil) }
+                Button(PulseLocalization.text("ui.quit")) { NSApplication.shared.terminate(nil) }
                     .buttonStyle(.plain).foregroundStyle(.secondary)
             }
             if let date = model.lastCompletedAt {
-                Text("上次查询完成 \(date.formatted(date: .omitted, time: .standard))")
+                Text(PulseLocalization.text("ui.lastQuery", PulseLocalization.formatDate(date, dateStyle: .omitted, timeStyle: .standard)))
                     .font(.caption2).foregroundStyle(.secondary)
             }
         }
         .padding(18)
         .frame(width: 390)
         .fixedSize(horizontal: false, vertical: true)
+        .environment(\.locale, PulseLocalization.locale)
         .background {
             GeometryReader { geometry in
                 MenuBarWindowSizer(size: geometry.size)
@@ -129,35 +136,35 @@ private struct AccountCard: View {
                     .padding(.horizontal, 6).padding(.vertical, 2)
                     .background(.quaternary, in: Capsule())
                 Spacer()
-                Text(refreshing ? "刷新中" : row.statusText)
+                Text(refreshing ? PulseLocalization.text("ui.refreshing") : row.statusText)
                     .font(.caption).foregroundStyle(row.isStale || row.status?.error != nil ? .orange : .secondary)
             }
-            QuotaLine(title: "五小时额度", window: row.bucket?.window(minutes: 300), stale: row.isStale || refreshing)
-            QuotaLine(title: "周额度", window: row.bucket?.window(minutes: 10080), stale: row.isStale || refreshing)
+            QuotaLine(title: PulseLocalization.text("quota.fiveHour"), window: row.bucket?.window(minutes: 300), stale: row.isStale || refreshing)
+            QuotaLine(title: PulseLocalization.text("quota.weekly"), window: row.bucket?.window(minutes: 10080), stale: row.isStale || refreshing)
             if let error = row.status?.error {
                 Text(error).font(.caption2).foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true)
             } else if row.status?.state == "notLoggedIn" {
-                Text("请先完成此账号的登录。")
+                Text(PulseLocalization.text("ui.signInFirst"))
                     .font(.caption2).foregroundStyle(.secondary)
             }
             if row.snapshot?.ordinaryUsageAllowed == false {
-                Label("服务端当前限制使用", systemImage: "pause.circle")
+                Label(PulseLocalization.text("quota.restricted"), systemImage: "pause.circle")
                     .font(.caption2).foregroundStyle(.orange)
             }
             if let error = row.status?.usernameError {
                 Text(error).font(.caption2).foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true)
             }
             if row.isStale, let date = row.snapshot?.capturedAt {
-                Text("上次成功更新 \(date.formatted(date: .abbreviated, time: .standard))")
+                Text(PulseLocalization.text("ui.lastSuccess", PulseLocalization.formatDate(date, dateStyle: .abbreviated, timeStyle: .standard)))
                     .font(.caption2).foregroundStyle(.secondary)
             }
             if runningAutomatic {
-                Text("正在检查自动请求…").font(.caption2).foregroundStyle(.secondary)
+                Text(PulseLocalization.text("ui.checkingAutomatic")).font(.caption2).foregroundStyle(.secondary)
             } else if let automatic {
                 Text(automatic.message).font(.caption2).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 if let next = automatic.nextRequestAt {
-                    Text("下次自动请求 \(next.formatted(date: .abbreviated, time: .shortened))")
+                    Text(PulseLocalization.text("ui.nextAutomatic", PulseLocalization.formatDate(next, dateStyle: .abbreviated, timeStyle: .shortened)))
                         .font(.caption2).foregroundStyle(.secondary)
                 }
             }
@@ -173,6 +180,10 @@ private struct QuotaLine: View {
     let stale: Bool
 
     private var remaining: Double? { window.map { 100 - $0.usedPercent } }
+    private func remainingText(_ remaining: Double) -> String {
+        let number = remaining.formatted(.number.precision(.fractionLength(0...1)).locale(PulseLocalization.locale))
+        return PulseLocalization.text("quota.remaining", number)
+    }
     private var tint: Color {
         guard !stale, let remaining else { return .secondary }
         return remaining > 50 ? .green : (remaining >= 20 ? .yellow : .red)
@@ -184,19 +195,19 @@ private struct QuotaLine: View {
                 Text(title).font(.caption)
                 Spacer()
                 if let remaining {
-                    Text("剩余 \(remaining.formatted(.number.precision(.fractionLength(0...1))))%")
+                    Text(remainingText(remaining))
                         .font(.caption.weight(.medium)).monospacedDigit().foregroundStyle(tint)
-                } else { Text("未知").font(.caption).foregroundStyle(.secondary) }
+                } else { Text(PulseLocalization.text("quota.unknown")).font(.caption).foregroundStyle(.secondary) }
             }
             if let remaining {
                 ProgressView(value: remaining, total: 100).tint(tint)
-                    .accessibilityLabel(title).accessibilityValue("剩余 \(remaining)%")
+                    .accessibilityLabel(title).accessibilityValue(remainingText(remaining))
             }
             if let reset = window?.resetsAt {
                 let date = Date(timeIntervalSince1970: Double(reset))
-                Text("服务端重置 \(date.formatted(date: .abbreviated, time: .shortened))")
+                Text(PulseLocalization.text("quota.serverReset", PulseLocalization.formatDate(date, dateStyle: .abbreviated, timeStyle: .shortened)))
                     .font(.caption2).foregroundStyle(.secondary)
-            } else { Text("重置时间未知").font(.caption2).foregroundStyle(.secondary) }
+            } else { Text(PulseLocalization.text("quota.resetUnknown")).font(.caption2).foregroundStyle(.secondary) }
         }
     }
 }

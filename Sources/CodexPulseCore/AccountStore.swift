@@ -6,14 +6,14 @@ public enum AccountError: Error, CustomStringConvertible {
 
     public var description: String {
         switch self {
-        case .invalidName: "账号别名须为 1～64 个可显示字符。"
-        case .duplicateID: "该账号 ID 已在列表中。"
-        case .accountLimit: "账号数量限制已取消。"
-        case .notFound: "账号 ID 不在管理列表中。"
-        case .deleting: "账号正在删除；请再次执行 remove 完成本地清理。"
-        case .busy: "账号或列表正在被另一操作使用，请稍后再试。"
-        case .invalidStorage: "本地账号存储无效或目录不安全；未覆盖原文件。"
-        case .storageFailure: "本地账号文件操作失败；未输出凭据或原始文件内容。"
+        case .invalidName: PulseLocalization.text("error.account.invalidName")
+        case .duplicateID: PulseLocalization.text("error.account.duplicateID")
+        case .accountLimit: PulseLocalization.text("error.account.limitRemoved")
+        case .notFound: PulseLocalization.text("error.account.notFound")
+        case .deleting: PulseLocalization.text("error.account.deleting")
+        case .busy: PulseLocalization.text("error.account.busy")
+        case .invalidStorage: PulseLocalization.text("error.account.invalidStorage")
+        case .storageFailure: PulseLocalization.text("error.account.storageFailure")
         }
     }
 }
@@ -24,12 +24,16 @@ public struct ManagedAccount: Codable, Equatable, Sendable {
     public var name: String
     public let createdAt: Date
     public var pendingDeletion: Bool
+    /// 仅 GUI 生成的临时名称需要随界面语言变化；旧条目和自定义别名不翻译。
+    public var usesGeneratedName: Bool?
 
-    public init(id: String, name: String, createdAt: Date = Date(), pendingDeletion: Bool = false) {
+    public init(id: String, name: String, createdAt: Date = Date(), pendingDeletion: Bool = false,
+                usesGeneratedName: Bool? = nil) {
         self.id = id
         self.name = name
         self.createdAt = createdAt
         self.pendingDeletion = pendingDeletion
+        self.usesGeneratedName = usesGeneratedName
     }
 }
 
@@ -143,12 +147,14 @@ public struct AccountStore: Sendable {
     public func list() throws -> [ManagedAccount] { try locked { $0.accounts } }
 
     @discardableResult
-    public func add(name: String, id: String = UUID().uuidString.lowercased()) throws -> ManagedAccount {
+    public func add(name: String, id: String = UUID().uuidString.lowercased(),
+                    usesGeneratedName: Bool? = nil) throws -> ManagedAccount {
         try validateName(name)
         _ = try ProbePaths(account: id, root: root)
         return try locked { registry in
             guard !registry.accounts.contains(where: { $0.id == id }) else { throw AccountError.duplicateID }
-            let account = ManagedAccount(id: id, name: name, createdAt: Date(), pendingDeletion: false)
+            let account = ManagedAccount(id: id, name: name, createdAt: Date(), pendingDeletion: false,
+                                         usesGeneratedName: usesGeneratedName)
             registry.accounts.append(account)
             try save(registry)
             return account
@@ -161,6 +167,7 @@ public struct AccountStore: Sendable {
             guard let index = registry.accounts.firstIndex(where: { $0.id == id }) else { throw AccountError.notFound }
             guard !registry.accounts[index].pendingDeletion else { throw AccountError.deleting }
             registry.accounts[index].name = name
+            registry.accounts[index].usesGeneratedName = nil
             try save(registry)
         }
     }

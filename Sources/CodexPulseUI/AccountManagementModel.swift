@@ -34,7 +34,7 @@ public final class AccountManagementModel: ObservableObject {
             addAccount: {
                 try await Task.detached {
                     let id = UUID().uuidString.lowercased()
-                    return try store.add(name: "待登录账号 \(id.prefix(8))", id: id)
+                    return try store.add(name: id, id: id, usesGeneratedName: true)
                 }.value
             }, loginAccount: { id, force, cancellation in
                 try await Task.detached(priority: .userInitiated) {
@@ -78,7 +78,7 @@ public final class AccountManagementModel: ObservableObject {
         do {
             try await removeAccount(id)
             menu.removeRegisteredAccount(id: id)
-            message = "已删除此账号的本地登录数据。"
+            message = PulseLocalization.text("account.removed")
         } catch { handle(error) }
         await finish()
     }
@@ -86,17 +86,17 @@ public final class AccountManagementModel: ObservableObject {
     public func cancelLogin() {
         guard isLoggingIn else { return }
         cancellation?.cancel()
-        message = "正在取消登录…"
+        message = PulseLocalization.text("account.cancelling")
     }
 
     private func authenticate(id: String, force: Bool) async throws {
         let token = LoginCancellation()
         cancellation = token
         isLoggingIn = true
-        message = "请在浏览器选择目标 ChatGPT 账号并完成授权（最多等待 10 分钟）。"
+        message = PulseLocalization.text("account.awaitingLogin")
         try await loginAccount(id, force, token)
         if token.isCancelled { throw CancellationError() }
-        message = "登录授权完成。"
+        message = PulseLocalization.text("account.loginCompleted")
     }
 
     private func begin() -> Bool {
@@ -116,7 +116,7 @@ public final class AccountManagementModel: ObservableObject {
 
     private func handle(_ error: Error) {
         if cancellation?.isCancelled == true || error is CancellationError {
-            message = "登录已取消；可重新登录或删除未完成的条目。"
+            message = PulseLocalization.text("account.loginCancelled")
         } else {
             message = nil
             self.error = Self.message(error)
@@ -126,9 +126,9 @@ public final class AccountManagementModel: ObservableObject {
     private static func message(_ error: Error) -> String {
         if let error = error as? AccountError { return error.description }
         if let error = error as? ProbeError {
-            if case .codexNotInstalled = error { return "未找到本机 Codex CLI，请安装后重新检测。" }
+            if case .codexNotInstalled = error { return PulseLocalization.text("account.cliMissing") }
             return error.description
         }
-        return "账号操作失败，请重试；未输出登录凭据。"
+        return PulseLocalization.text("account.operationFailed")
     }
 }

@@ -62,7 +62,7 @@ public struct AutomaticRequestService: Sendable {
                 guard allowed.contains(status.account.id), let identity = status.snapshot?.identityDigest else {
                     return (index, AutomaticRequestResult(accountID: status.account.id,
                         message: status.state == "loggedIn" && status.snapshot?.identityDigest != nil
-                            ? "重复登录，自动请求暂停" : "账号或额度状态未知，自动请求暂停"))
+                            ? PulseLocalization.text("automatic.duplicate") : PulseLocalization.text("automatic.unknownAccount")))
                 }
                 return (index, process(id: status.account.id, expectedIdentity: identity))
             }
@@ -88,7 +88,7 @@ public struct AutomaticRequestService: Sendable {
                 let session = ProbeSession(client: client)
                 let snapshot = try session.readQuota()
                 guard snapshot.identityDigest == expectedIdentity else {
-                    return AutomaticRequestResult(accountID: id, message: "账号身份已变化，自动请求暂停", snapshot: snapshot)
+                    return AutomaticRequestResult(accountID: id, message: PulseLocalization.text("automatic.identityChanged"), snapshot: snapshot)
                 }
                 let checkpointURL = try checkpointFile(paths: paths)
                 var checkpoint = try load(at: checkpointURL)
@@ -97,11 +97,11 @@ public struct AutomaticRequestService: Sendable {
                 let bucket = snapshot.buckets["codex"]
                 guard let five = bucket?.window(minutes: 300), let weekly = bucket?.window(minutes: 10080),
                       let reset = five.resetsAt else {
-                    return result(id, "额度窗口或重置时间未知，自动请求暂停", snapshot, checkpoint)
+                    return result(id, PulseLocalization.text("automatic.unknownWindow"), snapshot, checkpoint)
                 }
-                if weekly.usedPercent >= 100 { return result(id, "周额度已耗尽，自动请求停止", snapshot, checkpoint) }
+                if weekly.usedPercent >= 100 { return result(id, PulseLocalization.text("automatic.weeklyExhausted"), snapshot, checkpoint) }
                 if five.usedPercent >= 100 {
-                    return result(id, "五小时额度已耗尽，等待重置", snapshot, checkpoint,
+                    return result(id, PulseLocalization.text("automatic.fiveHourExhausted"), snapshot, checkpoint,
                                   next: future(reset, at: date))
                 }
                 do { try snapshot.validateForProbe(limitID: "codex") }
@@ -111,14 +111,14 @@ public struct AutomaticRequestService: Sendable {
                         // 崩溃或超时可能已发出请求；只采纳新读取的服务端窗口，不补发。
                         saved.nextReset = future(reset, at: date).map { Int64($0.timeIntervalSince1970) }
                         try save(saved, to: checkpointURL)
-                        return result(id, saved.outcome == "completed" ? "请求已完成，等待服务端重置" : "上次请求结果待确认，等待服务端重置", snapshot, saved,
+                        return result(id, saved.outcome == "completed" ? PulseLocalization.text("automatic.completedWaiting") : PulseLocalization.text("automatic.unconfirmedWaiting"), snapshot, saved,
                                       next: future(reset, at: date))
                     }
                     if let nextReset = saved.nextReset, Double(nextReset) > date.timeIntervalSince1970 {
                         let next = future(reset, at: date) ?? Date(timeIntervalSince1970: Double(nextReset))
                         saved.nextReset = Int64(next.timeIntervalSince1970)
                         try save(saved, to: checkpointURL)
-                        return result(id, saved.outcome == "completed" ? "自动请求已就绪" : "上次请求未确认，等待重置",
+                        return result(id, saved.outcome == "completed" ? PulseLocalization.text("automatic.ready") : PulseLocalization.text("automatic.unconfirmed"),
                                       snapshot, saved, next: next)
                     }
                 }
@@ -136,9 +136,9 @@ public struct AutomaticRequestService: Sendable {
                     attempt.outcome = "completed"
                     try save(attempt, to: checkpointURL)
                     if after.buckets["codex"]?.window(minutes: 10080)?.usedPercent == 100 {
-                        return result(id, "请求完成；周额度已耗尽，自动请求停止", after, attempt)
+                        return result(id, PulseLocalization.text("automatic.completedWeeklyExhausted"), after, attempt)
                     }
-                    return result(id, attempt.nextReset == nil ? "请求完成；下次重置未知，自动请求暂停" : "最小请求已完成",
+                    return result(id, attempt.nextReset == nil ? PulseLocalization.text("automatic.completedResetUnknown") : PulseLocalization.text("automatic.completed"),
                                   after, attempt, next: attempt.nextReset.map { Date(timeIntervalSince1970: Double($0)) })
                 } catch {
                     // 失败也留下已尝试记录；同一窗口不重试，不输出原始错误或响应。
@@ -189,6 +189,6 @@ public struct AutomaticRequestService: Sendable {
     private func message(_ error: Error) -> String {
         if let error = error as? ProbeError { return error.description }
         if let error = error as? AccountError { return error.description }
-        return "自动请求失败，已暂停；未自动重试。"
+        return PulseLocalization.text("automatic.failed")
     }
 }

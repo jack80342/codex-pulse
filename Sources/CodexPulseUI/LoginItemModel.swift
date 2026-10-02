@@ -1,3 +1,4 @@
+import CodexPulseCore
 import Combine
 import Foundation
 import ServiceManagement
@@ -46,7 +47,7 @@ public final class LoginItemModel: ObservableObject {
         guard !isChanging else { return }
         error = nil
         guard isInstalled else {
-            error = "请先将 Codex Pulse 安装到应用程序目录。"
+            error = PulseLocalization.text("loginItem.installRequired")
             return
         }
         if !readDefaultApplied() { saveDefaultApplied() }
@@ -59,10 +60,10 @@ public final class LoginItemModel: ObservableObject {
             else { try await unregister() }
             refresh()
             if enabled != isEnabled {
-                error = "系统未完成登录启动设置，请检查系统登录项。"
+                error = PulseLocalization.text("loginItem.transitionFailed")
             }
         } catch {
-            self.error = "无法更改登录启动设置（错误代码 \((error as NSError).code)）。"
+            self.error = PulseLocalization.text("loginItem.error", (error as NSError).code)
         }
     }
 

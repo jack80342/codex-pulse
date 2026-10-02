@@ -43,11 +43,11 @@ struct AutomaticRequestTests {
         try store.add(name: "A", id: "a")
         try quota(store, ["reset": 1_900_000_120])
         let first = try service(store, at: date).process(id: "a", expectedIdentity: identity())
-        #expect(first.message == "最小请求已完成")
+        #expect(first.message == PulseLocalization.text("automatic.completed"))
         #expect(first.nextRequestAt == date.addingTimeInterval(120))
         #expect(first.snapshot?.buckets["codex"]?.window(minutes: 300)?.usedPercent == 10.5)
         let restarted = try service(store, at: date.addingTimeInterval(10)).process(id: "a", expectedIdentity: identity())
-        #expect(restarted.message == "自动请求已就绪")
+        #expect(restarted.message == PulseLocalization.text("automatic.ready"))
         #expect(try attempts(root) == 1)
         let checkpoint = root.appendingPathComponent("scheduling/a.json")
         let permissions = try FileManager.default.attributesOfItem(atPath: checkpoint.path)[.posixPermissions] as? Int
@@ -71,7 +71,7 @@ struct AutomaticRequestTests {
         let waking = date.addingTimeInterval(100_000)
         try quota(store, ["reset": 1_900_000_010, "afterReset": 1_900_118_000])
         let result = try service(store, at: waking).process(id: "a", expectedIdentity: identity())
-        #expect(result.message == "最小请求已完成")
+        #expect(result.message == PulseLocalization.text("automatic.completed"))
         #expect(result.nextRequestAt == Date(timeIntervalSince1970: 1_900_118_000))
         _ = try service(store, at: waking).process(id: "a", expectedIdentity: identity())
         #expect(try attempts(root) == 2)
@@ -110,11 +110,11 @@ struct AutomaticRequestTests {
         try store.add(name: "A", id: "a")
         try quota(store, ["reset": 1_900_000_120, "afterReset": NSNull()])
         let first = try service(store, at: date).process(id: "a", expectedIdentity: identity())
-        #expect(first.message.contains("请求完成"))
+        #expect(first.message == PulseLocalization.text("automatic.completedResetUnknown"))
         #expect(first.nextRequestAt == nil)
         try quota(store, ["reset": 1_900_000_220])
         let recovered = try service(store, at: date).process(id: "a", expectedIdentity: identity())
-        #expect(recovered.message == "请求已完成，等待服务端重置")
+        #expect(recovered.message == PulseLocalization.text("automatic.completedWaiting"))
         #expect(recovered.nextRequestAt == date.addingTimeInterval(220))
         #expect(try attempts(root) == 1)
     }
@@ -127,7 +127,7 @@ struct AutomaticRequestTests {
         try store.add(name: "A", id: "a")
         try quota(store, ["reset": 1_900_000_120, "afterReadIdentity": "changed"])
         let result = try service(store, at: date).process(id: "a", expectedIdentity: identity())
-        #expect(!result.message.contains("已完成"))
+        #expect(result.message != PulseLocalization.text("automatic.completed"))
         #expect(try attempts(root) == 0)
     }
 
@@ -139,7 +139,7 @@ struct AutomaticRequestTests {
         try store.add(name: "A", id: "a")
         try quota(store, ["reset": 1_900_000_120, "weekly": 99, "afterWeekly": 100])
         let result = try service(store, at: date).process(id: "a", expectedIdentity: identity())
-        #expect(result.message.contains("周额度已耗尽"))
+        #expect(result.message == PulseLocalization.text("automatic.completedWeeklyExhausted"))
         #expect(result.nextRequestAt == nil)
         _ = try service(store, at: date.addingTimeInterval(130)).process(id: "a", expectedIdentity: identity())
         #expect(try attempts(root) == 1)
@@ -154,7 +154,7 @@ struct AutomaticRequestTests {
         try quota(store, ["reset": 1_900_000_120])
         let failed = try service(store, at: date, mode: "turn-timeout").process(id: "a", expectedIdentity: identity())
         #expect(failed.nextRequestAt == date.addingTimeInterval(120))
-        #expect(!failed.message.contains("已完成"))
+        #expect(failed.message != PulseLocalization.text("automatic.completed"))
         _ = try service(store, at: date).process(id: "a", expectedIdentity: identity())
         #expect(try attempts(root) == 1)
         let methods = try String(contentsOf: root.appendingPathComponent("accounts/a/fixture-methods"), encoding: .utf8)
@@ -180,7 +180,7 @@ struct AutomaticRequestTests {
         try data.write(to: scheduling.appendingPathComponent("a.json"))
         let result = try service(store, at: date).process(id: "a", expectedIdentity: identity())
         #expect(result.nextRequestAt == date.addingTimeInterval(120))
-        #expect(result.message.contains("待确认"))
+        #expect(result.message == PulseLocalization.text("automatic.unconfirmedWaiting"))
         #expect(try attempts(root) == 0)
     }
 
@@ -209,12 +209,12 @@ struct AutomaticRequestTests {
         try store.add(name: "A", id: "a")
         try quota(store, ["reset": 1_900_000_120, "identity": "changed"])
         let changed = try service(store, at: date).process(id: "a", expectedIdentity: identity())
-        #expect(changed.message.contains("身份已变化"))
+        #expect(changed.message == PulseLocalization.text("automatic.identityChanged"))
         #expect(try attempts(root) == 0)
         let paths = try ProbePaths(account: "a", root: root)
         let lease = try paths.acquireLease()
         let blocked = try service(store, at: date).process(id: "a", expectedIdentity: identity())
-        #expect(blocked.message.contains("另一操作"))
+        #expect(blocked.message == AccountError.busy.description)
         #expect(try attempts(root) == 0)
         withExtendedLifetime(lease) {}
     }
@@ -231,7 +231,7 @@ struct AutomaticRequestTests {
         try store.add(name: "New", id: "a")
         try quota(store, ["reset": 1_900_000_120])
         let result = try service(store, at: date).process(id: "a", expectedIdentity: identity())
-        #expect(result.message == "最小请求已完成")
+        #expect(result.message == PulseLocalization.text("automatic.completed"))
         #expect(try attempts(root) == 1) // 旧账号目录随删除清理，新条目拥有新的尝试。
     }
 
@@ -252,7 +252,7 @@ struct AutomaticRequestTests {
         let service = try service(store, at: date)
         let results = await service.run(statuses: statuses)
         #expect(results.map(\.accountID) == ids)
-        #expect(results.allSatisfy { $0.message == "最小请求已完成" })
+        #expect(results.allSatisfy { $0.message == PulseLocalization.text("automatic.completed") })
         _ = await service.run(statuses: statuses)
         for id in ids { #expect(try attempts(root, id: id) == 1) }
     }
@@ -279,7 +279,7 @@ struct AutomaticRequestTests {
         #expect(results[1].nextRequestAt == nil)
         let duplicate = AccountStatus(account: accounts[1], state: "loggedIn", snapshot: statuses[0].snapshot, error: nil)
         let second = await service.run(statuses: [statuses[0], duplicate])
-        #expect(second[1].message.contains("重复登录"))
+        #expect(second[1].message == PulseLocalization.text("automatic.duplicate"))
         #expect(try attempts(root, id: "b") == 0)
     }
 }

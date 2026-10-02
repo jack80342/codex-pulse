@@ -10,6 +10,23 @@ struct AccountTests {
     }
 
     @Test
+    func generatedNameMetadataIsOptionalAndRenamePreservesCustomAliases() throws {
+        try withStore { store in
+            let legacy = try store.add(name: "legacy", id: "legacy")
+            #expect(legacy.usesGeneratedName == nil)
+            let legacyJSON = try JSONEncoder().encode(legacy)
+            #expect(!String(decoding: legacyJSON, as: UTF8.self).contains("usesGeneratedName"))
+            #expect(try JSONDecoder().decode(ManagedAccount.self, from: legacyJSON).usesGeneratedName == nil)
+            try store.add(name: "generated", id: "generated", usesGeneratedName: true)
+            #expect(try AccountStore(root: store.root).list().last?.usesGeneratedName == true)
+            try store.rename(id: "generated", name: "自定义别名")
+            let renamed = try AccountStore(root: store.root).list().last
+            #expect(renamed?.name == "自定义别名")
+            #expect(renamed?.usesGeneratedName == nil)
+        }
+    }
+
+    @Test
     func testRegistrySurvivesRestartAndRenameKeepsCredentials() throws {
         try withStore { store in
             let account = try store.add(name: "主账号", id: "probe-1")

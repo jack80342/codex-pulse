@@ -19,7 +19,7 @@ public struct ProbePaths: Sendable {
     public init(account: String, root: URL? = nil) throws {
         guard !account.isEmpty, account.count <= 64,
               account.unicodeScalars.allSatisfy({ CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_").contains($0) })
-        else { throw ProbeError.invalidArgument("账号别名仅支持 1～64 位字母、数字、连字符和下划线。") }
+        else { throw ProbeError.invalidArgument(PulseLocalization.text("error.probe.invalidID")) }
         let base = root ?? FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent("Library/Application Support/CodexPulse")
         self.root = base
@@ -37,7 +37,7 @@ public struct ProbePaths: Sendable {
             try PrivateStorage.directory(url)
         }
         guard try FileManager.default.contentsOfDirectory(atPath: workspace.path).isEmpty else {
-            throw ProbeError.invalidArgument("专用工作目录必须为空，避免读取项目内容。")
+            throw ProbeError.invalidArgument(PulseLocalization.text("error.probe.nonemptyWorkspace"))
         }
     }
 
@@ -72,7 +72,7 @@ public final class ProbeSession {
 
     /// 两个命令行入口共用认证流程；URL 仅交给浏览器打开，不保存或输出。
     public func login(timeout: TimeInterval = 600, openURL: (URL) throws -> Void) throws {
-        guard timeout.isFinite, timeout > 0 else { throw ProbeError.invalidArgument("登录超时必须是正数。") }
+        guard timeout.isFinite, timeout > 0 else { throw ProbeError.invalidArgument(PulseLocalization.text("error.probe.positiveLoginTimeout")) }
         if let account = try readAccount() {
             guard account["type"] as? String == "chatgpt" else { throw ProbeError.unsupportedAccount }
             return
@@ -133,14 +133,14 @@ public final class ProbeSession {
         reportURL: URL, previousURL: URL? = nil, turnTimeout: TimeInterval = 90, expectedIdentity: String? = nil
     ) throws -> ProbeReport {
         guard turnTimeout.isFinite, turnTimeout > 0 else {
-            throw ProbeError.invalidArgument("模型执行超时必须是正数。")
+            throw ProbeError.invalidArgument(PulseLocalization.text("error.probe.positiveTurnTimeout"))
         }
         let before = try readQuota()
         if let expectedIdentity, before.identityDigest != expectedIdentity { throw ProbeError.invalidResponse }
         var modelName = requestedModel
         if let previousURL {
             let previous = try ProbeReport.load(from: previousURL)
-            guard previous.limitID == limitID else { throw ProbeError.invalidArgument("额度桶与原报告不一致。") }
+            guard previous.limitID == limitID else { throw ProbeError.invalidArgument(PulseLocalization.text("error.probe.bucketMismatch")) }
             try previous.validateContinuation(account: account, snapshot: before)
             if modelName == nil { modelName = previous.model }
         }
@@ -151,7 +151,7 @@ public final class ProbeSession {
             return entry["isDefault"] as? Bool == true
         }
         guard let selected, let model = selected["model"] as? String else {
-            throw ProbeError.invalidArgument("指定模型未出现在当前目录中；请执行 models 查看。")
+            throw ProbeError.invalidArgument(PulseLocalization.text("error.probe.modelMissing"))
         }
         var report = ProbeReport(account: account, limitID: limitID, model: model, before: before, previous: previousURL)
         try report.save(to: reportURL)
@@ -199,7 +199,7 @@ public final class ProbeSession {
             return report
         } catch {
             report.status = "incomplete"
-            report.failure = (error as? ProbeError)?.description ?? "本地报告写入失败。"
+            report.failure = (error as? ProbeError)?.description ?? PulseLocalization.text("error.probe.reportWrite")
             try? report.save(to: reportURL)
             throw error
         }

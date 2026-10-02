@@ -3,6 +3,7 @@ import PackageDescription
 
 let package = Package(
     name: "CodexPulse",
+    defaultLocalization: "en",
     platforms: [.macOS(.v14)],
     products: [
         .library(name: "CodexPulseCore", targets: ["CodexPulseCore"]),
@@ -11,7 +12,7 @@ let package = Package(
         .executable(name: "CodexPulseApp", targets: ["CodexPulseApp"])
     ],
     targets: [
-        .target(name: "CodexPulseCore"),
+        .target(name: "CodexPulseCore", resources: [.process("Resources")]),
         .target(name: "CodexPulseUI", dependencies: ["CodexPulseCore"]),
         .executableTarget(name: "CodexPulseApp", dependencies: ["CodexPulseUI"]),
         .executableTarget(name: "CodexPulseProbe", dependencies: ["CodexPulseCore"]),

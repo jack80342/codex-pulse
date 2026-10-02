@@ -122,7 +122,7 @@ struct MenuBarModelTests {
         await loader.failNext()
         await model.refresh()
         #expect(model.nextAutomaticCheckAt == nil)
-        #expect(model.automaticResults["a"]?.message.contains("暂停") == true)
+        #expect(model.automaticResults["a"]?.message == PulseLocalization.text("automatic.queryFailed"))
     }
 
     @Test
@@ -203,7 +203,7 @@ struct MenuBarModelTests {
         #expect(model.rows.map(\.plan) == ["Plus", "Free"])
         #expect(model.rows[1].bucket?.window(minutes: 300) == nil)
         #expect(model.rows[1].bucket?.window(minutes: 10080) == nil)
-        #expect(model.rows[1].statusText == "已登录")
+        #expect(model.rows[1].statusText == PulseLocalization.text("status.loggedIn"))
         #expect(!model.rows[1].isStale)
     }
 
@@ -232,7 +232,7 @@ struct MenuBarModelTests {
         #expect(model.rows[0].snapshot?.buckets["codex"]?.window(minutes: 300)?.usedPercent == 40)
         #expect(model.rows[0].isStale)
         #expect(model.rows[0].status?.error == "额度查询超时")
-        #expect(model.rows[0].statusText == "数据未更新")
+        #expect(model.rows[0].statusText == PulseLocalization.text("status.stale"))
         #expect(model.rows[1].snapshot?.buckets["codex"]?.window(minutes: 300)?.usedPercent == 15)
         #expect(!model.rows[1].isStale)
     }
@@ -273,7 +273,7 @@ struct MenuBarModelTests {
         await loader.update([AccountStatus(account: recreated, state: "notLoggedIn", snapshot: nil, error: nil)], removeMissing: true)
         await model.refresh()
         #expect(model.rows[0].snapshot == nil)
-        #expect(model.rows[0].statusText == "未登录")
+        #expect(model.rows[0].statusText == PulseLocalization.text("status.notLoggedIn"))
         #expect(model.rows[0].displayName == "新账号")
         #expect(model.rows[0].lastUsername == nil)
     }
@@ -323,7 +323,7 @@ struct MenuBarModelTests {
         let loader = FixtureLoader([a, b])
         let model = model(loader)
         await model.refresh()
-        #expect(model.duplicateNames == ["a与b"])
+        #expect(model.duplicateNames == [PulseLocalization.text("status.duplicatePair", "a", "b")])
         await loader.update([a, AccountStatus(account: b.account, state: "error", snapshot: nil, error: "失败")])
         await model.refresh()
         #expect(model.duplicateNames.isEmpty)

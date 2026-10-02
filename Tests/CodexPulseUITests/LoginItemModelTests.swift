@@ -1,3 +1,4 @@
+import CodexPulseCore
 import CodexPulseUI
 import Foundation
 import ServiceManagement
@@ -151,7 +152,7 @@ struct LoginItemModelTests {
         await model.setEnabled(true)
         #expect(!model.isEnabled)
         #expect(fixture.registrations == 0)
-        #expect(model.error?.contains("安装") == true)
+        #expect(model.error == PulseLocalization.text("loginItem.installRequired"))
     }
 
     @Test

@@ -20,19 +20,19 @@ public enum ProbeError: Error, CustomStringConvertible {
     public var description: String {
         switch self {
         case .invalidArgument(let message): message
-        case .codexNotInstalled: "未找到 Codex CLI，请用 --codex 指定绝对路径。"
-        case .notLoggedIn: "独立验证账号尚未登录，请先执行 login。"
-        case .loginFailed: "浏览器认证流程未成功，请重新执行 login 并完成登录。"
-        case .unsupportedAccount: "验证只支持独立登录的 ChatGPT 账号。"
-        case .unknownQuota: "额度许可或五小时/周窗口未知，停止模型请求。"
-        case .exhaustedQuota: "服务端限制使用或额度已耗尽，停止模型请求。"
-        case .invalidResponse: "app-server 响应不符合预期协议。"
-        case .rpc(let method, let code): "\(method) 返回协议错误（代码 \(code)）；未输出原始响应。"
-        case .timeout(let operation): "\(operation) 超时；模型请求结果可能未知，不应自动重试。"
-        case .processExited: "app-server 输出流已关闭。"
-        case .launchFailed: "无法启动 Codex CLI 或浏览器。"
-        case .unexpectedTool: "验证请求触发了工具操作，已停止验证。"
-        case .turnFailed(let status): "模型请求未成功完成（状态：\(status)）。"
+        case .codexNotInstalled: PulseLocalization.text("error.probe.cliMissing")
+        case .notLoggedIn: PulseLocalization.text("error.probe.notLoggedIn")
+        case .loginFailed: PulseLocalization.text("error.probe.loginFailed")
+        case .unsupportedAccount: PulseLocalization.text("error.probe.unsupported")
+        case .unknownQuota: PulseLocalization.text("error.probe.unknownQuota")
+        case .exhaustedQuota: PulseLocalization.text("error.probe.exhausted")
+        case .invalidResponse: PulseLocalization.text("error.probe.invalidResponse")
+        case .rpc(let method, let code): PulseLocalization.text("error.probe.rpc", method, code)
+        case .timeout(let operation): PulseLocalization.text("error.probe.timeout", operation)
+        case .processExited: PulseLocalization.text("error.probe.processExited")
+        case .launchFailed: PulseLocalization.text("error.probe.launchFailed")
+        case .unexpectedTool: PulseLocalization.text("error.probe.unexpectedTool")
+        case .turnFailed(let status): PulseLocalization.text("error.probe.turnFailed", status)
         }
     }
 }
@@ -61,7 +61,7 @@ public final class AppServerClient: @unchecked Sendable {
         timeout: TimeInterval = 15
     ) throws {
         guard timeout.isFinite, timeout > 0 else {
-            throw ProbeError.invalidArgument("超时必须是正数。")
+            throw ProbeError.invalidArgument(PulseLocalization.text("error.probe.positiveTimeout"))
         }
         self.timeout = timeout
         var environment = ProcessInfo.processInfo.environment
@@ -137,7 +137,7 @@ public final class AppServerClient: @unchecked Sendable {
                 return notifications.remove(at: index)
             }
             if let failure { throw failure }
-            guard condition.wait(until: deadline) else { throw ProbeError.timeout("等待通知") }
+            guard condition.wait(until: deadline) else { throw ProbeError.timeout(PulseLocalization.text("error.probe.waitNotification")) }
         }
     }
 
