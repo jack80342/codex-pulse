@@ -116,6 +116,10 @@ public struct MenuBarPanel: View {
                 .keyboardShortcut("r", modifiers: .command)
                 Spacer()
             }
+            if let date = model.lastCompletedAt {
+                Text(PulseLocalization.text("ui.lastQuery", PulseLocalization.formatDate(date, dateStyle: .omitted, timeStyle: .standard)))
+                    .font(.caption2).foregroundStyle(.secondary)
+            }
             if let error = updates.error {
                 Text(error).font(.caption2).foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true)
             } else if let message = updates.message {
@@ -130,10 +134,6 @@ public struct MenuBarPanel: View {
                         }
                     }.font(.caption)
                 }
-            }
-            if let date = model.lastCompletedAt {
-                Text(PulseLocalization.text("ui.lastQuery", PulseLocalization.formatDate(date, dateStyle: .omitted, timeStyle: .standard)))
-                    .font(.caption2).foregroundStyle(.secondary)
             }
         }
         .padding(18)

@@ -2,7 +2,7 @@
 
 ## 行为
 
-- 标题右上角“⋯ / 更多选项”菜单提供“检查更新 / Check for Updates”及“退出 / Quit”；底部只保留“立即刷新”和上次查询时间，更新结果按需显示。仅在用户点击检查更新时请求 GitHub。
+- 标题右上角“⋯ / 更多选项”菜单提供“检查更新 / Check for Updates”及“退出 / Quit”；底部只保留“立即刷新”和上次查询时间，版本信息与更新结果在查询时间下方的面板最底部按需显示。仅在用户点击检查更新时请求 GitHub。
 - 查询 `GET https://api.github.com/repos/jack80342/codex-pulse/releases/latest`，不携带 Codex 登录凭据、Cookie 或认证信息。
 - 按三个数字段比较版本，例如 `0.7.10` 大于 `0.7.9`；不推荐草稿、预发布版本或降级。
 - 发现新版时显示版本号和“查看更新”。正式 Release 中存在已上传、非空且名称匹配的 DMG 时，另显示“下载安装包”；入口由浏览器打开，安装由用户完成。
@@ -47,6 +47,19 @@
 - `docs/design-plan.md`
 - `docs/phase-7-update-check.md`
 - `/Users/j/Desktop/work/Codex多账号额度小组件推荐方案.md`（与仓库方案同步）
+
+## 0.8.2 版本信息置底（2026-10-02）
+
+按用户要求，将版本信息及更新相关提示移到“上次查询完成”下方，更新说明和下载入口同属面板最底部的版本区域。只改变展示顺序，查询时间和更新检查的触发条件保持原有行为。
+
+release 构建通过，中英文原生宿主渲染检查确认查询时间位于版本信息上方；同时检查了有新版及查询错误状态。本次显示顺序调整未新增测试。应用与 DMG 签名、公证、凭证附加及校验、分发检查和 DMG 完整性检查通过，本机已安装并启动 0.8.2（构建号 14）。
+
+- 应用提交 ID：`8beb8e2d-b933-48c5-9710-62e1c6c5f085`（Accepted）
+- DMG 提交 ID：`83eb8af0-da67-45c4-871a-b874ecd7f5b4`（Accepted）
+- 本地安装包：`.build/dist/notarized/Codex-Pulse-0.8.2.dmg`（830,614 bytes）
+- SHA-256：`df7c9638ec4026696f036c0854d14c58b156af2b973614c07973c2d0eaf3f257`
+
+修改文件：`Sources/CodexPulseUI/MenuBarPanel.swift`、`Resources/Info.plist`、`docs/design-plan.md`、`docs/phase-7-update-check.md`，并同步 `/Users/j/Desktop/work/Codex多账号额度小组件推荐方案.md`。影响范围为面板显示顺序和本次交付版本；验证使用原生宿主演示数据，未重新执行真实菜单栏点击验收。
 
 ## 0.8.0 修改文件
 
