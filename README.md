@@ -13,6 +13,8 @@ Codex Pulse is a macOS menu bar app for managing multiple Codex accounts. It dis
 
 The app runs on macOS 14 or later and automatically locates an installed Codex CLI.
 
+Licensed under the [MIT License](LICENSE).
+
 ## How it works
 
 ### Account isolation and quota reads

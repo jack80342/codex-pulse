@@ -13,6 +13,8 @@ Codex Pulse 是一个 macOS 菜单栏工具，用于管理多个 Codex 账号、
 
 支持 macOS 14 及以上，自动查找已安装的 Codex CLI。
 
+采用 [MIT 许可证](LICENSE)。
+
 ## 原理说明
 
 ### 账号隔离与额度查询
