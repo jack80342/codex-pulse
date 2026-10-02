@@ -61,7 +61,7 @@ public struct MenuBarPanel: View {
                 Label("\(model.duplicateNames.joined(separator: "、"))使用同一账号，额度共享。", systemImage: "person.2")
                     .font(.caption).foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true)
             }
-            DisclosureGroup("添加 / 管理账号", isExpanded: $managing) {
+            DisclosureGroup("管理账号", isExpanded: $managing) {
                 AccountManagementPanel(accounts: accounts, menu: model).padding(.top, 8)
             }
             Divider()
@@ -100,6 +100,12 @@ public struct MenuBarPanel: View {
         }
         .padding(18)
         .frame(width: 390)
+        .fixedSize(horizontal: false, vertical: true)
+        .background {
+            GeometryReader { geometry in
+                MenuBarWindowSizer(size: geometry.size)
+            }.allowsHitTesting(false)
+        }
         .task { accounts.checkExecutable(); loginItem.refresh(); await model.startIfNeeded() }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             loginItem.refresh()
