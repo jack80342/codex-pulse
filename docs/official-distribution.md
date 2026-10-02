@@ -59,3 +59,19 @@ Apple 流程参考：[自定义公证工作流](https://developer.apple.com/docu
 已通过：脚本语法与差异检查，缺少参数或无效证书时在构建和提交前停止，release 构建、DMG 完整性及挂载后应用签名检查，语言资源、许可证与无账号凭据打包检查，以及 99 项自动化测试。安装包为 Apple Silicon（arm64），最低 macOS 14，保留原有账号与调度逻辑。GitHub 安装包见 [0.7.1 发布页面](https://github.com/jack80342/codex-pulse/releases/tag/v0.7.1)。
 
 0.8.0（构建号 12）已完成签名、公证、凭证附加、本地安装包校验与应用替换；本次未新增 GitHub Release。更新检查及本次验证限制见 [第七阶段说明](phase-7-update-check.md)。
+
+## 最新发布：0.8.3（2026-10-02）
+
+[Codex Pulse 0.8.3](https://github.com/jack80342/codex-pulse/releases/tag/v0.8.3) 已发布为 Latest 正式版本，标签 `v0.8.3` 指向 `47a693ae8d310f82b46c5f428b0d0d3905d6daed`。包含手动检查更新、右上角更多菜单、版本信息置底及应用图标。
+
+- 安装包：[Codex-Pulse-0.8.3.dmg](https://github.com/jack80342/codex-pulse/releases/download/v0.8.3/Codex-Pulse-0.8.3.dmg)（1,235,967 bytes）
+- SHA-256：`9d656b44245fd775a2c6d3901436cd54df8841ef0db534a9cb8c7fe8b65d0e6c`
+- 校验文件：[SHA256SUMS.txt](https://github.com/jack80342/codex-pulse/releases/download/v0.8.3/SHA256SUMS.txt)
+- 应用提交 ID：`96c9851a-a5fd-4914-8aa1-1e7e1e22e13e`
+- DMG 提交 ID：`4292ffa8-279a-4270-918b-acee95639eed`
+
+应用及 DMG 均获 Apple Accepted，公证凭证已附加。发布前 109 项测试通过；发布后从 GitHub 下载 DMG，与本地已公证交付包逐字节相同，SHA-256 与 GitHub 资产摘要及发布说明一致，下载文件的公证凭证验证通过。发布页显示 Latest，并提供安装包、校验文件及源码归档。
+
+发布后的 GitHub 最新版本 API 请求暂时返回 HTTP 403、`X-RateLimit-Remaining: 0`，因此未将此时应用内检查更新的成功路径列为已通过。公开发布页与安装包下载验证通过；本版本尚未在另一台默认 Gatekeeper 设置的 Mac 重新验证首次启动。
+
+发布说明源文件：`docs/releases/v0.8.3.md`。下载验证及发布截图保存在 `.build/release-0.8.3-qa/`。

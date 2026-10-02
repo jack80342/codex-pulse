@@ -87,7 +87,7 @@ CodexPulse 菜单栏应用
 
 认证、进程、网络和展示由同一个菜单栏应用负责。
 
-应用使用与菜单栏心电波形主题一致的图标：浅色圆角底板和蓝色原创矢量波形。多尺寸 `AppIcon.icns` 随应用及 DMG 打包，用于 Finder 等系统应用图标展示；源图形由 `scripts/generate-app-icon.swift` 维护。
+应用使用与菜单栏心电波形主题一致的图标：浅色圆角底板和蓝色原创矢量波形。多尺寸 `AppIcon.icns` 随应用及 DMG 打包，用于 Finder 等系统应用图标展示；源图形由 `scripts/generate-app-icon.swift` 维护。0.8.3 已完成正式发布，包含应用图标及手动检查更新，见 [GitHub Release](https://github.com/jack80342/codex-pulse/releases/tag/v0.8.3)。
 
 ### 3.1 界面国际化（0.7.0）
 

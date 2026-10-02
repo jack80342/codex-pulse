@@ -36,3 +36,5 @@
 - `docs/design-plan.md`
 - `docs/phase-8-app-icon.md`
 - `/Users/j/Desktop/work/Codex多账号额度小组件推荐方案.md`（同步仓库方案）
+
+2026-10-02：0.8.3 已发布为 GitHub 最新正式 Release，并完成下载包逐字节及公证凭证校验，见 [正式分发记录](official-distribution.md#最新发布0832026-10-02)。
