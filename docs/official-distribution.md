@@ -30,7 +30,7 @@ CODEX_PULSE_NOTARY_PROFILE='codex-pulse-notary' \
 1. 检查有效证书和钥匙串凭据，使用 Developer ID 签名应用并启用 Hardened Runtime 和安全时间戳。
 2. 提交应用 ZIP，只有 Apple 返回 `Accepted` 后才附加并验证应用公证凭证。
 3. 将带凭证的应用打包为 DMG，签名 DMG，提交 Apple 公证并附加 DMG 凭证。
-4. 校验应用及 DMG 的签名、公证凭证、Gatekeeper 评估与 DMG 完整性。最终安装包保存到 `.build/dist/notarized/`，校验值与 Apple 提交结果、日志保存于本次工作目录。
+4. 校验应用及 DMG 的签名、公证凭证、`syspolicy_check` 分发检查、Gatekeeper 评估与 DMG 完整性。最终安装包保存到 `.build/dist/notarized/`，校验值与 Apple 提交结果、日志保存于本次工作目录。
 
 任何签名、公证或校验失败都会终止流程，不会生成新的最终交付包。发生网络中断时，先使用日志中的提交 ID 查询 Apple 处理状态，避免直接重复提交。凭证附加后不要修改应用内容或重新签名。
 
@@ -45,6 +45,15 @@ Apple 流程参考：[自定义公证工作流](https://developer.apple.com/docu
 
 ## 当前进度（2026-10-02）
 
-已在 Apple Developer 团队 `766AV76B44` 创建并导入 Developer ID Application（G2）证书，私钥保留于本机钥匙串。`0.7.1`（构建号 11）已完成真实 Developer ID 签名，Hardened Runtime、安全时间戳与签名校验通过。公证钥匙串配置 `codex-pulse-notary` 待配置；尚未提交 Apple 公证或重新发布正式安装包。
+已在 Apple Developer 团队 `766AV76B44` 创建并导入 Developer ID Application（G2）证书，私钥保留于本机钥匙串；公证凭据通过 `codex-pulse-notary` 钥匙串配置使用。
 
-已通过：脚本语法与差异检查，缺少参数或无效证书时在构建和提交前停止，release 构建、DMG 完整性及挂载后应用签名检查，语言资源、许可证与无账号凭据打包检查，以及 99 项自动化测试。该验收包为本地 ad-hoc 签名，仅用于验证打包流程。
+`0.7.1`（构建号 11）已完成 Developer ID 签名、Hardened Runtime、安全时间戳、应用和 DMG 的 Apple 公证及凭证附加。Apple 两次提交均为 `Accepted`，日志中 `issues` 为 `null`。
+
+- 应用提交 ID：`c4bff767-b148-4a34-bbbd-341f4779e36d`
+- DMG 提交 ID：`aa9d84e5-d7bf-478c-a1b8-0fc93c7734e4`
+- 最终文件：`Codex-Pulse-0.7.1.dmg`（769,299 bytes）
+- 最终 SHA-256：`1e9747b2a6f405be755223e0b7bfadd7ff22c6d1d6fea89ddf9aacf644be81a0`
+
+最终 DMG 完整性与附加凭证验证通过；挂载后其中应用的严格签名、公证凭证及 `syspolicy_check distribution` 分发检查通过。当前 Mac 的 Gatekeeper 全局评估关闭，`spctl` 输出包含 `override=security disabled`，因此不将该输出单独作为默认 Gatekeeper 拦截行为的验收证据。未在另一台启用默认 Gatekeeper 的 Mac 完成首次安装验证。
+
+已通过：脚本语法与差异检查，缺少参数或无效证书时在构建和提交前停止，release 构建、DMG 完整性及挂载后应用签名检查，语言资源、许可证与无账号凭据打包检查，以及 99 项自动化测试。安装包为 Apple Silicon（arm64），最低 macOS 14，保留原有账号与调度逻辑。GitHub 安装包见 [0.7.1 发布页面](https://github.com/jack80342/codex-pulse/releases/tag/v0.7.1)。

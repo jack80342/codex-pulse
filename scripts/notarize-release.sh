@@ -60,6 +60,7 @@ ditto -c -k --keepParent "$codex_pulse_app" "$codex_pulse_work/Codex-Pulse.zip"
 notarize "$codex_pulse_work/Codex-Pulse.zip" app
 xcrun stapler staple "$codex_pulse_app"
 xcrun stapler validate "$codex_pulse_app"
+syspolicy_check distribution "$codex_pulse_app"
 spctl --assess --type execute --verbose=4 "$codex_pulse_app"
 
 CODEX_PULSE_APP_PATH="$codex_pulse_app" CODEX_PULSE_DIST_DIRECTORY="$codex_pulse_work" ./scripts/package-dmg.sh
