@@ -115,6 +115,7 @@
 "error.profile.http" = "Account profile query failed (HTTP %ld).";
 
 // Manual update checks
+"ui.more" = "More Options";
 "update.check" = "Check for Updates";
 "update.checking" = "Checking…";
 "update.available" = "Version %@ is available.";

@@ -2,7 +2,7 @@
 
 ## 行为
 
-- 面板底部提供“检查更新 / Check for Updates”，仅在用户点击时请求 GitHub。
+- 标题右上角“⋯ / 更多选项”菜单提供“检查更新 / Check for Updates”及“退出 / Quit”；底部只保留“立即刷新”和上次查询时间，更新结果按需显示。仅在用户点击检查更新时请求 GitHub。
 - 查询 `GET https://api.github.com/repos/jack80342/codex-pulse/releases/latest`，不携带 Codex 登录凭据、Cookie 或认证信息。
 - 按三个数字段比较版本，例如 `0.7.10` 大于 `0.7.9`；不推荐草稿、预发布版本或降级。
 - 发现新版时显示版本号和“查看更新”。正式 Release 中存在已上传、非空且名称匹配的 DMG 时，另显示“下载安装包”；入口由浏览器打开，安装由用户完成。
@@ -25,7 +25,30 @@
 
 本机 `/Applications/Codex Pulse.app` 已替换为签名、公证版 0.8.0 并启动。既有 GitHub 0.7.1 Release 保留，本次未创建新的 Release。
 
-## 本次修改文件
+## 0.8.1 布局调整（2026-10-02）
+
+按用户确认的方案，将“检查更新”和“退出”移入标题右上角的“⋯”菜单，底部保留“立即刷新”与查询完成时间，更新结果仍按需显示。增加中英文“更多选项”提示及辅助功能名称，检查更新期间在标题区域显示进度并禁用重复查询。额度和账号管理调用链保持原有行为。
+
+109 项现有测试通过，release 构建及中英文界面渲染检查通过。实际更新查询已恢复，取得 GitHub 当前正式版本 `0.7.1`、发布页面及 DMG 下载链接。桌面工具读取已安装应用时超时，尚未自动完成实际菜单点击验收。
+
+0.8.1（构建号 13）应用及 DMG 均获 Apple `Accepted`，公证日志下载、凭证附加与验证、签名及分发检查、DMG 完整性检查通过；已安装并启动本机签名、公证版应用。
+
+- 应用提交 ID：`e3572691-95a5-419f-b3fe-079baeb8c10b`
+- DMG 提交 ID：`413a80db-657d-4082-8082-279b2e5a1f43`
+- 本地安装包：`.build/dist/notarized/Codex-Pulse-0.8.1.dmg`（830,641 bytes）
+- SHA-256：`18b154e84273d846f4726808b9377141bf6a0650e07c7ef64d30e13edfeba028`
+
+本次修改文件：
+
+- `Sources/CodexPulseUI/MenuBarPanel.swift`
+- `Sources/CodexPulseCore/Resources/en.lproj/Localizable.strings`
+- `Sources/CodexPulseCore/Resources/zh-Hans.lproj/Localizable.strings`
+- `Resources/Info.plist`
+- `docs/design-plan.md`
+- `docs/phase-7-update-check.md`
+- `/Users/j/Desktop/work/Codex多账号额度小组件推荐方案.md`（与仓库方案同步）
+
+## 0.8.0 修改文件
 
 - `Sources/CodexPulseCore/AppUpdateClient.swift`
 - `Sources/CodexPulseUI/AppUpdateModel.swift`

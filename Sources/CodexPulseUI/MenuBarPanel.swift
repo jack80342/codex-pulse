@@ -37,7 +37,24 @@ public struct MenuBarPanel: View {
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
-                if model.isRefreshing { ProgressView().controlSize(.small) }
+                if model.isRefreshing || updates.isChecking { ProgressView().controlSize(.small) }
+                Menu {
+                    Button(PulseLocalization.text(updates.isChecking ? "update.checking" : "update.check")) {
+                        Task { await updates.check() }
+                    }.disabled(updates.isChecking)
+                    Divider()
+                    Button(PulseLocalization.text("ui.quit")) { NSApplication.shared.terminate(nil) }
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.body).foregroundStyle(.secondary)
+                        .frame(width: 24, height: 24)
+                        .contentShape(Rectangle())
+                }
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
+                .fixedSize()
+                .help(PulseLocalization.text("ui.more"))
+                .accessibilityLabel(PulseLocalization.text("ui.more"))
             }
             if let error = model.globalError {
                 Label(error, systemImage: "exclamationmark.triangle")
@@ -98,11 +115,6 @@ public struct MenuBarPanel: View {
                 .disabled(model.isRefreshing || accounts.isBusy)
                 .keyboardShortcut("r", modifiers: .command)
                 Spacer()
-                Button(PulseLocalization.text(updates.isChecking ? "update.checking" : "update.check")) {
-                    Task { await updates.check() }
-                }.disabled(updates.isChecking)
-                Button(PulseLocalization.text("ui.quit")) { NSApplication.shared.terminate(nil) }
-                    .buttonStyle(.plain).foregroundStyle(.secondary)
             }
             if let error = updates.error {
                 Text(error).font(.caption2).foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true)

@@ -115,6 +115,7 @@
 "error.profile.http" = "账号资料查询失败（HTTP %ld）。";
 
 // Manual update checks
+"ui.more" = "更多选项";
 "update.check" = "检查更新";
 "update.checking" = "正在检查…";
 "update.available" = "发现新版本 %@。";
