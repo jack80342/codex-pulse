@@ -54,6 +54,8 @@ Apple 流程参考：[自定义公证工作流](https://developer.apple.com/docu
 - 最终文件：`Codex-Pulse-0.7.1.dmg`（769,299 bytes）
 - 最终 SHA-256：`1e9747b2a6f405be755223e0b7bfadd7ff22c6d1d6fea89ddf9aacf644be81a0`
 
-最终 DMG 完整性与附加凭证验证通过；挂载后其中应用的严格签名、公证凭证及 `syspolicy_check distribution` 分发检查通过。当前 Mac 的 Gatekeeper 全局评估关闭，`spctl` 输出包含 `override=security disabled`，因此不将该输出单独作为默认 Gatekeeper 拦截行为的验收证据。未在另一台启用默认 Gatekeeper 的 Mac 完成首次安装验证。
+最终 DMG 完整性与附加凭证验证通过；挂载后其中应用的严格签名、公证凭证及 `syspolicy_check distribution` 分发检查通过。当前 Mac 的 Gatekeeper 全局评估关闭，`spctl` 输出包含 `override=security disabled`，因此不将该输出单独作为默认 Gatekeeper 拦截行为的验收证据。发布后用户已确认：安装包替换旧版、三个账号与额度及自动调度、登录时启动状态均正常；另一台保持默认 Gatekeeper 设置的 Mac 下载并首次打开通过。此项为用户实际验收结果。
 
 已通过：脚本语法与差异检查，缺少参数或无效证书时在构建和提交前停止，release 构建、DMG 完整性及挂载后应用签名检查，语言资源、许可证与无账号凭据打包检查，以及 99 项自动化测试。安装包为 Apple Silicon（arm64），最低 macOS 14，保留原有账号与调度逻辑。GitHub 安装包见 [0.7.1 发布页面](https://github.com/jack80342/codex-pulse/releases/tag/v0.7.1)。
+
+0.8.0（构建号 12）已完成签名、公证、凭证附加、本地安装包校验与应用替换；本次未新增 GitHub Release。更新检查及本次验证限制见 [第七阶段说明](phase-7-update-check.md)。

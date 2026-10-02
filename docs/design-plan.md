@@ -15,10 +15,10 @@
 - 账号名称及套餐类型
 - 当前额度已使用百分比
 - 当前可用额度百分比
-- 不同额度窗口及下次重置时间，包括当前的 5 小时额度和周额度
-- Credits 余额及可用重置次数（接口返回时展示）
+- Codex 五小时额度、周额度及各自下次重置时间
 - 数据更新时间、登录失效和查询异常状态
 - 中文、英文界面，启动时按 macOS 首选语言顺序自动选择
+- 手动检查 GitHub 最新正式版本，提供更新说明及安装包下载入口
 
 该工具定位为个人本地工具，不依赖自建服务器，不抓取网页，不影响日常使用的 Codex App。
 
@@ -41,9 +41,13 @@
 - 最小模型请求本身会消耗额度；该功能目标是尽早启动可用窗口，不承诺增加额度或累积未使用窗口。
 - 模型请求使用各账号独立的 ChatGPT 登录状态，在专用空工作目录和独立会话中执行，不读取用户项目、不执行命令、不修改文件。
 - 一个账号的查询失败、请求失败或认证失效不得影响其他账号；周额度缺失或查询异常时，不得推断为仍有额度并继续发送模型请求。
-- 定时请求由 macOS 主应用负责，需应用后台运行、电脑处于唤醒状态且网络可用；iOS 端只展示状态。
+- 定时请求由 macOS 菜单栏应用负责，需应用后台运行、电脑处于唤醒状态且网络可用。
 
 参考：[Codex App Server 额度接口](https://learn.chatgpt.com/docs/app-server)、[套餐额度说明](https://learn.chatgpt.com/docs/pricing)、[官方五小时窗口规则](https://help.openai.com/en/articles/20001516-managing-usage-with-gpt-6-astra-in-work-and-codex)。
+
+### 1.2 检查更新
+
+菜单栏面板提供“检查更新”。用户点击后查询 GitHub 最新正式 Release，与当前安装版本按数字比较；有新版时显示版本号，并提供“查看更新”和“下载安装包”入口。没有新版时显示当前版本已是最新；网络、限流或返回数据异常时明确提示并可重试。无安装包时仅提供更新说明。只手动检查，不自动下载或安装，不使用任何 Codex 账号凭据。0.8.0 已实现，验证及交付详情见 `docs/phase-7-update-check.md`。
 
 ## 2. 可行性结论
 
@@ -61,8 +65,6 @@ account/rateLimits/read
 - `usedPercent`
 - `windowDurationMins`
 - `resetsAt`
-- `credits.balance`
-- `rateLimitResetCredits`
 - `rateLimitsByLimitId` 中的多个额度桶
 - `primary`、`secondary` 等额度窗口
 
@@ -100,7 +102,6 @@ CodexPulse 菜单栏应用
 - `Process`、`Pipe`：运行 Codex app-server 并进行 JSONL 通信
 - `Codable`：解析协议响应
 - `SMAppService`：可选的登录时启动
-- Unified Logging：记录不含凭据的运行状态
 
 最低支持版本建议为 macOS 14。
 
@@ -230,63 +231,23 @@ nvm / fnm 已安装的 Node 版本目录
 
 每个账号设置 15 秒超时，账号数量不设上限，最多三个任务独立并发查询，单个失败保留其他账号结果。只保存自己启动的 `Process` 引用，结束时只终止对应进程。
 
-不建议按账号数量常驻 app-server，因为额度只需要分钟级更新，短期进程更容易控制资源和故障边界。
+按需使用短期 app-server 进程，完成查询后关闭，控制资源和故障边界。
 
 ## 8. 数据模型
 
-```swift
-struct CodexAccount: Codable, Identifiable {
-    let id: UUID
-    var alias: String
-    var email: String?
-    var codexHomePath: String
-    var createdAt: Date
-}
+当前实现使用以下模型：
 
-struct AccountQuota: Codable, Identifiable {
-    let id: UUID
-    let accountID: UUID
-    let planType: String?
-    let windows: [QuotaWindow]
-    let creditBalanceRaw: String?
-    let resetCreditCount: Int
-    let updatedAt: Date
-    let status: QuotaStatus
-}
+- `ManagedAccount`：本地账号配置、固定 ID、独立目录及创建时间。
+- `QuotaSnapshot`：采集时间、身份摘要、普通使用许可及接口返回的额度桶。
+- `QuotaBucket`：套餐、额度限制状态和非空窗口。
+- `QuotaWindow`：已使用百分比、窗口时长及服务端重置时间。
 
-struct QuotaWindow: Codable, Identifiable {
-    let id: String
-    let limitID: String?
-    let durationMinutes: Int?
-    let usedPercent: Double
-    let resetsAt: Date?
-
-    var availablePercent: Double {
-        max(0, 100 - usedPercent)
-    }
-}
-```
-
-界面不能写死 `primary` 等于 5 小时、`secondary` 等于 7 天。应根据 `windowDurationMins` 生成标签：`300` 分钟显示“5小时额度”，`10080` 分钟显示“7天额度”，其它值显示实际时长；未知时长保留兼容标签。展示层将 `usedPercent` 四舍五入为整数百分比，解析层保留 `Double`，兼容服务端的小数表示。
-
-读取时优先遍历：
-
-```text
-rateLimitsByLimitId 的全部额度桶
-```
-
-每个额度桶分别展开 `primary`、`secondary` 等非空窗口。`rateLimits` 只是向后兼容的单桶视图；仅当多桶字段不存在时才回退使用它：
-
-```text
-rateLimits
-```
+解析优先采用 `rateLimitsByLimitId`；仅在该字段缺失时使用 `rateLimits`。界面选择 `codex` 桶；没有该桶且仅返回一个桶时使用该唯一桶。界面按 `windowDurationMins` 查找 300 分钟和 10080 分钟窗口，分别显示五小时和周额度；缺失时显示未知。解析保留 `Double`，展示最多一位小数。
 
 ### 8.1 5 小时额度展示规则
 
 - 同一账号的 5 小时额度和周额度分别显示，不能用其中一个覆盖另一个。
-- 若任一额度窗口的剩余百分比低于阈值，菜单栏提示该窗口名称及重置时间。
-- 接近或经过 5 小时窗口重置时间时，触发一次完整的 `account/rateLimits/read`；周额度及其它额度桶均以该次服务端返回值更新。
-- `account/rateLimits/updated` 通知只可能包含部分字段；收到通知后合并到最近一次完整快照，或直接重新调用 `account/rateLimits/read`，不得将未返回窗口清空。
+- 到达服务端重置时间时，调用 `account/rateLimits/read` 读取完整快照，更新五小时和周额度。
 
 ## 9. 数据存储与安全
 
@@ -296,13 +257,13 @@ rateLimits
 
 - 各账号独立 `CODEX_HOME`
 - 账号配置
-- 协议兼容状态
+- 自动请求检查点
 
 目录权限应限制为当前用户访问。
 
-### 日志
+### 错误与验证报告
 
-日志不得包含：
+错误信息和验证报告不得包含：
 
 - access token
 - refresh token
@@ -312,15 +273,16 @@ rateLimits
 
 ## 10. 刷新策略
 
-当前实现启动、手动、重置到期、唤醒及系统时间变化时查询，按服务端重置时间自动发送最小请求；15～30 分钟额外轮询和网络恢复监听仍为后续规划。本节的定期刷新只查询额度。第 1.1 节的自动模型请求使用独立调度，不能在每次 15～30 分钟刷新时发送模型请求。
+当前查询时机：
 
-主应用：
+- 应用启动
+- 用户点击“立即刷新”
+- 到达服务端返回的重置时间
+- 电脑唤醒
+- 系统时间变化
+- 账号管理操作完成
 
-- 应用启动时立即刷新
-- 用户点击“立即刷新”时刷新
-- 后台常驻时每 15～30 分钟刷新
-- 网络恢复后刷新
-- 接近重置时间时安排一次刷新
+查询后由独立的自动请求检查点决定是否发送最小模型请求。同一账号当前窗口最多尝试一次，刷新不会重复发送已尝试窗口的请求。
 
 ## 11. 界面设计
 
@@ -353,7 +315,6 @@ Codex Pulse
 
 ```text
 codexNotInstalled
-unsupportedCodexVersion
 notLoggedIn
 authenticationExpired
 networkUnavailable
@@ -371,28 +332,11 @@ processLaunchFailed
 - 一个账号失败不能影响其他账号
 - 认证失效时只要求重新登录对应账号
 
-## 13. 协议兼容设计
+## 13. 协议通信
 
-`codex app-server` 目前仍是实验性功能，必须将所有协议逻辑封装在单独模块：
+`AppServerClient` 负责独立 app-server 进程、JSONL 初始化、响应匹配与通知等待；`ProbeSession` 和 `AccountService` 负责登录、账号及额度读取；`QuotaSnapshot` 负责解析额度响应。
 
-```text
-CodexProtocolAdapter
-├── initialize()
-├── login()
-├── readAccount()
-├── readRateLimits()
-└── decodeNotifications()
-```
-
-业务层和界面不直接依赖 app-server 原始 JSON。
-
-启动时执行：
-
-```bash
-codex --version
-```
-
-记录已验证版本范围。遇到未知版本时可以继续尝试兼容解析，但必须在失败后提示“当前 Codex CLI 版本暂不兼容”，不得修改正式 Codex App 或自动降级 Codex CLI。
+CLI 由 `CodexExecutable` 自动查找。协议或响应错误通过现有错误处理展示，不能伪造为成功或零额度。应用不修改正式 Codex App，也不自动降级 Codex CLI。
 
 ## 14. 测试方案
 
@@ -403,8 +347,6 @@ codex --version
 - 同时存在 5 小时和 7 天窗口
 - 5 小时窗口重置、周窗口保持不变
 - 存在多个 `limitId`
-- Credits 有余额和无余额
-- 可用重置次数大于 0
 - 登录失效
 - 返回未知字段
 - 缺少可选字段
@@ -417,13 +359,12 @@ codex --version
 - 连续查询所有已添加账号
 - 查询期间正常使用 Codex App
 - 退出菜单栏应用后确认无遗留 app-server 进程
-- 更新 Codex CLI 后执行兼容验证
-- 断网、恢复网络及认证过期测试
+- 查询失败、超时和认证失效处理
 
 ### 安全验证
 
 - 确认额度展示和导出数据不包含令牌
-- 确认日志不输出凭据
+- 确认错误信息和验证报告不输出凭据
 - 确认从未写入 `~/.codex`
 - 确认不会终止 Codex App 进程
 
@@ -461,230 +402,43 @@ codex --version
 
 此授权仅允许上述用户名资料查询，额度仍通过 app-server 读取，其余未公开 HTTP 接口不在范围内。
 
-### 第四阶段：自动请求调度、后台运行与打包，工期待重新估算
+### 第四阶段：自动请求调度、后台运行与打包
 
 - 启动时发送最小模型请求，按服务端五小时重置时间调度后续请求
 - 对周额度耗尽、额度未知或认证失效的账号停止自动请求
 - 开机启动、定时额度查询和唤醒恢复
-- 日志和错误恢复
+- 检查点和错误恢复
 - 签名及 DMG
 
 2026-10-01 已完成本阶段的自动请求调度：启动时先读取额度，符合条件的账号每窗口最多尝试一次真实最小请求，成功后读取服务端下一次重置时间；到期重新校验额度，周额度耗尽、额度未知或认证异常时停止对应账号。检查点在请求前落盘，重启和唤醒不会重复当前窗口请求，也不会补发错过的轮次；请求结果未知时等待已知服务端重置，不立即重试。面板展示每个账号的自动请求状态及下次请求时间。两个 Plus 账号真实请求完成，Free 账号窗口未知而跳过，重复执行未新增模型请求。详见 `docs/phase-4-automatic-requests.md`。
 
 当前支持应用常驻期间的调度及睡眠、唤醒和系统时间变化恢复。2026-10-02 已完成安装到 `/Applications/Codex Pulse.app`、基于 `SMAppService.mainApp` 的“登录时启动”开关和 DMG 拖放安装包。开关读取 macOS 真实注册状态，需要系统批准时提供设置入口，正式安装后的首次运行默认请求开启，不需要先打开菜单栏；通过一次性初始化标记保留后续手动或系统关闭选择，升级和重启不强制开启。安装和更新复用原账号目录及调度检查点，DMG 不包含任何账号数据。具体安装、构建及验证见 `docs/phase-4-installation.md`。
 
-2026-10-02 已补齐应用内账号管理并取消账号数量限制，见第五阶段说明。用户确认已验证完整五小时周期，本次不重复观察；跨周长期稳定性仍待验证。额外分钟级查询、网络恢复监听、Developer ID 分发签名及公证留待后续。
+2026-10-02 已补齐应用内账号管理并取消账号数量限制，见第五阶段说明。用户已确认完整五小时周期通过。0.7.1 已完成 Developer ID 签名、Apple 公证、应用与 DMG 凭证附加及 GitHub 发布，见 `docs/official-distribution.md`。用户已确认安装替换、账号及登录启动状态、另一台默认 Gatekeeper 设置的 Mac 首次打开均通过。
 
-### 第五阶段：测试和适配，原估算 1人天
+### 第五阶段：测试与验收
 
 - 多账号联调
 - Codex App 并行使用验证
-- 协议兼容测试
+- 当前协议响应与异常处理测试
 
-前三阶段及第四阶段的自动调度、安装、登录启动和本地 DMG 打包已完成；剩余工作为正式分发签名、公证及长期稳定性和协议适配验证。工期需按当前范围重新评估，自动请求功能尚未重新估算。
+当前确认范围已完成开发、99 项自动化测试、正式分发及用户实际安装验收。阶段说明保留各版本的历史验证记录。
 
-## 16. iOS App 与跨设备同步方案
-
-### 16.1 可行性结论
-
-可以同时提供 iOS App 和 iPhone Widget，但 iOS 设备不能运行 Homebrew 安装的 `codex` CLI，也不能直接复用 macOS 上的 `codex app-server` 查询方式。
-
-当前没有适合个人 Plus/Pro 账号、可供纯 iOS 应用直接查询 Codex 套餐剩余额度的正式公开 API。因此不推荐开发“完全脱离 Mac 的纯 iOS 查询端”。
-
-推荐让 Mac 继续承担额度采集任务，通过 CloudKit 将非敏感额度快照同步给 iPhone：
-
-```text
-Mac 数据采集端
-  ├── 各账号独立 CODEX_HOME
-  ├── 调用 codex app-server
-  ├── 查询所有已添加账号额度
-  └── 上传额度快照到 CloudKit
-                  ↓
-        CloudKit 私有数据库
-                  ↓
-iOS App + iOS Widget
-  ├── 展示所有已添加账号额度
-  ├── 展示下次重置时间
-  └── 不保存 Codex 登录凭据
-```
-
-### 16.2 多端工程结构
-
-建议在同一个 Xcode 工程中建立多个 Target，共享数据模型和展示组件：
-
-```text
-CodexPulse
-├── Shared
-│   ├── Models
-│   ├── QuotaFormatting
-│   ├── QuotaComponents
-│   └── CloudKitStore
-├── macOS App
-│   ├── CodexAppServerClient
-│   ├── AccountManager
-│   └── QuotaCollector
-├── iOS App
-│   ├── AccountList
-│   └── QuotaDetail
-└── iOS Widget
-```
-
-可跨平台复用：
-
-- 账号与额度数据模型
-- 剩余百分比计算
-- 额度窗口名称和重置时间格式
-- 进度条及状态颜色
-- CloudKit 快照读取逻辑
-- 错误和数据过期状态
-
-macOS 独有部分只有 Codex CLI 调用、账号登录和额度采集。
-
-### 16.3 CloudKit 数据模型
-
-CloudKit 仅保存展示需要的非敏感数据：
-
-```swift
-struct SyncedQuotaSnapshot: Codable {
-    let accountID: UUID
-    let alias: String
-    let planType: String?
-    let windows: [SyncedQuotaWindow]
-    let creditBalanceRaw: String?
-    let resetCreditCount: Int
-    let updatedAt: Date
-    let status: QuotaStatus
-}
-
-struct SyncedQuotaWindow: Codable {
-    let limitID: String?
-    let durationMinutes: Int?
-    let usedPercent: Double
-    let resetsAt: Date?
-}
-```
-
-建议使用用户 iCloud 账号下的 CloudKit 私有数据库。Mac 和 iPhone 需要登录同一个 Apple ID。
-
-严禁上传：
-
-- Codex access token
-- refresh token
-- Cookie
-- `auth.json`
-- 完整 app-server 认证响应
-- Codex 会话内容
-- 用户项目或工作区信息
-
-即使 CloudKit 同步发生故障，也只能影响额度展示，不能影响各 Codex 账号的认证状态。
-
-### 16.4 数据流与刷新
-
-Mac 端：
-
-- 每 15～30 分钟查询所有已添加账号
-- 将最新快照写入 CloudKit 私有数据库
-
-iOS App：
-
-- 启动或进入前台时读取 CloudKit
-- 将结果缓存到 iOS App Group
-- 数据变化后调用 `WidgetCenter.shared.reloadTimelines`
-- 提供手动刷新入口
-
-iOS Widget：
-
-- 优先展示 iOS App Group 中的缓存
-- 使用 Timeline 定期尝试更新
-- 使用 `Text(resetDate, style: .relative)` 展示动态倒计时
-- 数据超过 45～60 分钟时显示“数据可能已过期”
-
-Mac 关机、休眠或断网后，iPhone仍可显示最后一次同步的快照，但额度不会继续更新。界面必须展示最后更新时间，不能让旧数据看起来像实时结果。
-
-### 16.5 iOS Widget 形态
-
-建议支持：
-
-- `systemSmall`：展示用户选择的单个账号
-- `systemMedium`：展示所有已添加账号的剩余百分比
-- `systemLarge`：展示所有已添加账号的全部额度窗口和重置时间
-- 锁屏矩形 Widget：展示最低剩余额度及最近一次重置倒计时
-
-Small Widget 示例：
-
-```text
-主账号
-Plus
-5小时额度剩余 50%
-2小时后重置
-```
-
-Medium Widget 示例：
-
-```text
-主账号  5小时 50%   2小时后
-主账号  7天   72%   5天后
-工作账号 5小时 82%  2小时后
-```
-
-### 16.6 iOS 安全边界
-
-- iOS App 不保存任何 Codex 认证信息
-- iOS Widget 不接触 CloudKit 写权限之外的敏感数据
-- Widget App Group 只保存额度快照
-- 默认隐藏邮箱，只显示用户设置的别名
-- iPhone丢失时不会暴露可用于登录 Codex 的凭据
-- 删除账号时，由 Mac 端删除独立 `CODEX_HOME`；iOS只删除对应展示记录
-
-### 16.7 不推荐的 iOS 方案
-
-不推荐以下实现：
-
-- 在 iOS 中抓取 Codex Usage 网页
-- 将 ChatGPT Cookie 保存到 iPhone
-- 直接调用未公开的个人额度 HTTP 接口
-- 把所有已添加账号的凭据上传到自建服务器
-- 在 VPS 上长期运行多个 Codex CLI 账号
-- 仅依赖局域网从 iPhone 连接 Mac
-
-局域网方案只能在 Mac 醒着、网络相同且权限允许时工作；网页抓取和未公开接口则容易因登录及页面结构变化失效。
-
-### 16.8 iOS 增量工作量
-
-在 macOS 版本完成的基础上：
-
-- CloudKit 数据同步：1～2人天
-- iOS App 页面：1人天
-- iOS Widget：1人天
-- 跨设备刷新及异常处理：1～2人天
-- 真机测试、签名及权限配置：1人天
-
-iOS 增量工作量约为 3～6人天。
-
-整体工期需结合当前 macOS 剩余任务与上述 iOS 增量范围重新评估，暂不沿用原整体估算。
-
-使用 CloudKit、App Groups 和真机分发时，需要配置相应的 Apple Developer 能力、Bundle Identifier、Entitlements 及 CloudKit Container。
-
-## 17. 最终建议
+## 16. 最终建议
 
 第一版采用以下范围：
 
 - 个人自用，不上架 Mac App Store
-- 使用已安装的 `/opt/homebrew/bin/codex`
+- 自动查找已安装的 Codex CLI
 - 所有已添加账号全部使用独立 `CODEX_HOME`
 - 菜单栏应用常驻，统一展示额度并承担自动请求调度
-- 当前按服务端重置时间刷新，额外每 15～30 分钟轮询为后续规划
+- 按第 10 节的查询时机刷新额度
 - 按第 1.1 节实现启动时及 5 小时窗口重置后的最小模型请求，对周额度耗尽的账号停止自动请求
 - 不自建服务器
 - 不抓取 Codex Usage 网页
 - 除用户授权的只读用户名资料查询外，不直接调用未公开 HTTP 地址
 - 不读取或修改 `~/.codex`
 
-该方案实现路径短、隐私风险低，并能最大程度保证每天使用的 Codex App 不受影响。最大风险是 app-server 协议升级，因此必须通过独立协议适配层和版本检测控制影响范围。
+当前功能依赖 Codex CLI 协议及已授权的只读用户名资料接口；上游变化可能影响使用。账号隔离与进程控制保持本地安全边界。
 
-推荐分两个阶段实施：
-
-1. 第一阶段先验证登录、额度接口及最小模型请求完整执行，再按官方窗口规则完成 macOS 菜单栏应用、多账号隔离、额度采集、自动请求调度，验证核心数据链路及长期稳定性。
-2. 第二阶段增加 CloudKit 私有数据库、iOS App 和 iOS Widget。iOS端只负责读取和展示额度快照，不接触 Codex 登录凭据。
-
-这种实施顺序能够把最大的协议风险集中在 Mac 数据采集层。未来即使 `codex app-server` 发生变化，也只需要修改 `CodexProtocolAdapter`，不影响 CloudKit 数据结构和 iOS 展示层的主要界面代码。
+开发范围仅为当前已交付的 macOS 菜单栏应用。

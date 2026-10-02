@@ -113,3 +113,18 @@
 "error.probe.timeout" = "%@ timed out. The model request outcome may be unknown; do not automatically retry.";
 "error.probe.turnFailed" = "The model request did not complete successfully (status: %@).";
 "error.profile.http" = "Account profile query failed (HTTP %ld).";
+
+// Manual update checks
+"update.check" = "Check for Updates";
+"update.checking" = "Checking…";
+"update.available" = "Version %@ is available.";
+"update.current" = "You are up to date (%@).";
+"update.view" = "View Release";
+"update.download" = "Download Installer";
+"update.noInstaller" = "Installer not available yet.";
+"update.error.version" = "Cannot read the installed app version.";
+"update.error.response" = "GitHub returned invalid release information.";
+"update.error.network" = "Cannot connect to GitHub. Please try again.";
+"update.error.timeout" = "Update check timed out. Please try again.";
+"update.error.rateLimit" = "GitHub request limit reached. Please try again later.";
+"update.error.http" = "Update check failed (HTTP %ld). Please try again later.";

@@ -113,3 +113,18 @@
 "error.probe.timeout" = "%@ 超时；模型请求结果可能未知，不应自动重试。";
 "error.probe.turnFailed" = "模型请求未成功完成（状态：%@）。";
 "error.profile.http" = "账号资料查询失败（HTTP %ld）。";
+
+// Manual update checks
+"update.check" = "检查更新";
+"update.checking" = "正在检查…";
+"update.available" = "发现新版本 %@。";
+"update.current" = "当前已是最新版本（%@）。";
+"update.view" = "查看更新";
+"update.download" = "下载安装包";
+"update.noInstaller" = "安装包尚未提供。";
+"update.error.version" = "无法读取当前应用版本。";
+"update.error.response" = "GitHub 返回的版本信息无效。";
+"update.error.network" = "无法连接 GitHub，请重试。";
+"update.error.timeout" = "检查更新超时，请重试。";
+"update.error.rateLimit" = "GitHub 请求已达到限额，请稍后重试。";
+"update.error.http" = "检查更新失败（HTTP %ld），请稍后重试。";

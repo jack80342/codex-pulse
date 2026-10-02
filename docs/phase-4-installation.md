@@ -77,6 +77,6 @@ open "/Applications/Codex Pulse.app"
 - `docs/phase-4-installation.md`
 - 原方案 `/Users/j/Desktop/work/Codex多账号额度小组件推荐方案.md` 同步。
 
-## 适用范围与剩余项
+## 当前状态与使用边界
 
-当前应用和 DMG 使用本地 ad-hoc 签名，尚未使用 Developer ID 证书或公证；用于当前个人安装，不代表正式发布版本。系统是否允许运行登录项以其实际状态为准，更新本地签名的应用后如系统要求重新批准，可从开关及系统设置处理。跨周长期观察、额外分钟级额度查询和网络恢复监听不在本次范围。
+本文记录早期本地安装和打包流程。0.7.1 已完成 Developer ID 签名、Apple 公证、凭证附加和发布，见[分发说明](official-distribution.md)。用户已确认正式安装替换、账号保留、登录时启动状态及另一台默认 Gatekeeper 设置的 Mac 首次打开通过。系统是否允许运行登录项仍以其实际状态为准。

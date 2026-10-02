@@ -9,13 +9,15 @@ public struct MenuBarPanel: View {
     @ObservedObject private var model: MenuBarModel
     @ObservedObject private var loginItem: LoginItemModel
     @ObservedObject private var accounts: AccountManagementModel
+    @ObservedObject private var updates: AppUpdateModel
     @ViewState private var managing = false
 
     public init(model: MenuBarModel, loginItem: LoginItemModel = LoginItemModel(),
-                accounts: AccountManagementModel? = nil) {
+                accounts: AccountManagementModel? = nil, updates: AppUpdateModel = AppUpdateModel()) {
         self.model = model
         self.loginItem = loginItem
         self.accounts = accounts ?? AccountManagementModel.live(menu: model)
+        self.updates = updates
     }
 
     private var headerStatus: String {
@@ -96,8 +98,26 @@ public struct MenuBarPanel: View {
                 .disabled(model.isRefreshing || accounts.isBusy)
                 .keyboardShortcut("r", modifiers: .command)
                 Spacer()
+                Button(PulseLocalization.text(updates.isChecking ? "update.checking" : "update.check")) {
+                    Task { await updates.check() }
+                }.disabled(updates.isChecking)
                 Button(PulseLocalization.text("ui.quit")) { NSApplication.shared.terminate(nil) }
                     .buttonStyle(.plain).foregroundStyle(.secondary)
+            }
+            if let error = updates.error {
+                Text(error).font(.caption2).foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true)
+            } else if let message = updates.message {
+                Text(message).font(.caption2).foregroundStyle(.secondary)
+                if let release = updates.availableRelease {
+                    HStack {
+                        Link(PulseLocalization.text("update.view"), destination: release.pageURL)
+                        if let download = release.downloadURL {
+                            Link(PulseLocalization.text("update.download"), destination: download)
+                        } else {
+                            Text(PulseLocalization.text("update.noInstaller")).foregroundStyle(.secondary)
+                        }
+                    }.font(.caption)
+                }
             }
             if let date = model.lastCompletedAt {
                 Text(PulseLocalization.text("ui.lastQuery", PulseLocalization.formatDate(date, dateStyle: .omitted, timeStyle: .standard)))
