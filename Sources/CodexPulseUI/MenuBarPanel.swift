@@ -4,6 +4,7 @@ import AppKit
 
 public struct MenuBarPanel: View {
     @ObservedObject private var model: MenuBarModel
+    @StateObject private var loginItem = LoginItemModel()
 
     public init(model: MenuBarModel) { self.model = model }
 
@@ -44,6 +45,27 @@ public struct MenuBarPanel: View {
                     .font(.caption).foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true)
             }
             Divider()
+            Toggle("登录时启动", isOn: Binding(get: { loginItem.isEnabled }, set: { enabled in
+                Task { await loginItem.setEnabled(enabled) }
+            }))
+                .toggleStyle(.switch).controlSize(.small)
+                .disabled(loginItem.isChanging || !loginItem.isInstalled)
+            if !loginItem.isInstalled {
+                Text("安装到应用程序目录后可设置登录启动。")
+                    .font(.caption2).foregroundStyle(.secondary)
+            } else if loginItem.status == .requiresApproval {
+                HStack {
+                    Text("登录启动等待系统批准").font(.caption2).foregroundStyle(.orange)
+                    Spacer()
+                    Button("前往系统设置") { loginItem.openSettings() }.controlSize(.small)
+                }
+            } else if loginItem.status == .notFound {
+                Text("系统找不到登录项，请重新安装应用。")
+                    .font(.caption2).foregroundStyle(.orange)
+            }
+            if let error = loginItem.error {
+                Text(error).font(.caption2).foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true)
+            }
             HStack {
                 Button {
                     Task { await model.refresh() }
@@ -61,7 +83,10 @@ public struct MenuBarPanel: View {
         }
         .padding(18)
         .frame(width: 390)
-        .task { await model.startIfNeeded() }
+        .task { loginItem.refresh(); await model.startIfNeeded() }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            loginItem.refresh()
+        }
     }
 }
 

@@ -6,7 +6,7 @@ Codex 多账号额度管理工具，提供 macOS 菜单栏额度监控和按服�
 
 ## 当前状态
 
-已实现协议验证、三账号管理命令行工具和第三阶段的原生菜单栏应用。菜单栏支持账号列表、五小时/周额度、服务端重置时间、手动刷新和错误状态。已接入启动请求、重置后自动请求、窗口去重和唤醒恢复；开机启动、DMG 打包及 iOS 功能仍待实现。账号标题动态显示资料接口返回的真实用户名，刷新时同步更新。
+已实现协议验证、三账号管理命令行工具和第三阶段的原生菜单栏应用。菜单栏支持账号列表、五小时/周额度、服务端重置时间、手动刷新和错误状态。已接入启动请求、重置后自动请求、窗口去重和唤醒恢复；已提供安装脚本、登录时启动开关和 DMG 打包；iOS 功能仍为后续规划。账号标题动态显示资料接口返回的真实用户名，刷新时同步更新。
 
 第一阶段协议验证已完成：独立 Plus 账号登录、真实额度读取和一次最小请求均成功。官方已明确新五小时窗口由上一窗口结束后的首条消息启动，无需等待额外窗口实验；原定重置后验证任务已取消。详细观测见 [第一阶段验证说明](docs/phase-1-verification.md)。仓库已配置 GitHub `origin`；本次工作仅作本地提交，未推送。
 
@@ -36,6 +36,26 @@ swift run codex-pulse-probe verify-reset --report "<首次报告的绝对路径>
 重置后验证沿用原报告模型并核对账号身份。未到重置时间、额度许可未知或已耗尽时停止，不发送模型请求。更多步骤和判定边界见 [第一阶段验证说明](docs/phase-1-verification.md)。
 
 ## 菜单栏应用
+
+安装到应用程序目录：
+
+```bash
+cd /Users/j/github_repo/codex-pulse
+./scripts/install-app.sh
+open "/Applications/Codex Pulse.app"
+```
+
+安装后可在菜单栏开启“登录时启动”。开关读取系统真实状态；需要批准时点击“前往系统设置”。首次安装不自动开启，开发目录副本的开关不可用，避免登录时启动错误副本。更新已安装应用前先退出它。
+
+生成拖放安装包：
+
+```bash
+./scripts/package-dmg.sh
+```
+
+输出 `.build/dist/Codex-Pulse-<版本>.dmg`，打开后将应用拖到 Applications。安装包只有应用与 Applications 链接，不包含账号凭据；账号数据继续保存在原 Application Support 目录。详情见[安装与登录启动说明](docs/phase-4-installation.md)。本地 ad-hoc 签名适用于当前自用，尚未做 Developer ID 签名和公证。
+
+仅用于开发目录运行：
 
 ```bash
 cd /Users/j/github_repo/codex-pulse
@@ -79,10 +99,12 @@ swift run codex-pulse accounts remove --id "<ID>"
 1. 验证 Codex app-server 初始化、额度读取及最小模型请求完整执行（已完成）。
 2. 实现三个账号的独立登录和账号管理（已完成，两 Plus 加一 Free，均已真实登录和并发查询）。
 3. 实现菜单栏额度展示、手动刷新及错误状态（已实现；包含动态资料用户名）。
-4. 自动请求调度、窗口去重及唤醒恢复已实现；开机启动、DMG 打包待完成。
+4. 自动请求调度、窗口去重、唤醒恢复、安装、登录时启动及 DMG 打包已实现；正式分发签名和公证待完成。
 5. 完成三账号联调、异常处理及与日常 Codex App 并行使用验证。
 
 后续阶段增加 CloudKit 私有数据库同步、iOS App 和 iPhone 小组件。
+
+2026-10-02 用户确认已验证完整五小时周期，本次不重复观察；跨周长期验证仍待完成。
 
 ## 技术方向
 
@@ -123,9 +145,12 @@ codex-pulse/
 │   ├── phase-1-verification.md
 │   ├── phase-2-account-management.md
 │   ├── phase-3-menu-bar.md
-│   └── phase-4-automatic-requests.md
+│   ├── phase-4-automatic-requests.md
+│   └── phase-4-installation.md
 ├── Resources/Info.plist
 ├── scripts/build-app.sh
+├── scripts/install-app.sh
+├── scripts/package-dmg.sh
 ├── scripts/test.sh
 ├── .gitignore
 ├── .gitattributes
