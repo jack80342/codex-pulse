@@ -1,5 +1,6 @@
 import CodexPulseCore
 import SwiftUI
+import UniformTypeIdentifiers
 
 // 使用传统 State 包装器，避免 CLT SDK 同名宏需要缺失的 SwiftUIMacros 插件。
 private typealias ViewState<Value> = SwiftUI.State<Value>
@@ -8,6 +9,9 @@ struct AccountManagementPanel: View {
     @ObservedObject var accounts: AccountManagementModel
     @ObservedObject var menu: MenuBarModel
     @ViewState private var confirmation: Confirmation?
+    @ViewState private var draggedID: String?
+    @ViewState private var dropTarget: String?
+    @ViewState private var dropAfter = false
 
     private struct Confirmation {
         let row: MenuAccountRow
@@ -70,6 +74,19 @@ struct AccountManagementPanel: View {
                     LazyVStack(spacing: 8) {
                         ForEach(menu.rows) { row in
                             HStack {
+                                Image(systemName: "line.3.horizontal")
+                                    .foregroundStyle(.secondary)
+                                    .padding(4)
+                                    .contentShape(Rectangle())
+                                    .help(PulseLocalization.text("account.reorder"))
+                                    .accessibilityLabel(PulseLocalization.text("account.reorder"))
+                                    .onDrag {
+                                        guard !disabled, confirmation == nil else { return NSItemProvider() }
+                                        dropTarget = nil
+                                        draggedID = row.id
+                                        return NSItemProvider(item: Data(row.id.utf8) as NSData,
+                                                              typeIdentifier: accountOrderType.identifier)
+                                    }
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(row.displayName).lineLimit(1)
                                     Text(row.statusText).font(.caption2).foregroundStyle(.secondary)
@@ -89,6 +106,16 @@ struct AccountManagementPanel: View {
                                 }
                             }
                             .controlSize(.small).disabled(disabled)
+                            .padding(.vertical, 4)
+                            .modifier(AccountOrderTarget(targetID: row.id,
+                                enabled: !disabled && confirmation == nil,
+                                draggedID: $draggedID, target: $dropTarget, after: $dropAfter,
+                                ids: menu.rows.map(\.id), accounts: accounts))
+                            .overlay(alignment: dropAfter ? .bottom : .top) {
+                                if dropTarget == row.id {
+                                    Rectangle().fill(Color.accentColor).frame(height: 2).allowsHitTesting(false)
+                                }
+                            }
                         }
                     }
                 }
@@ -96,5 +123,79 @@ struct AccountManagementPanel: View {
             }
         }
         .onAppear { accounts.checkExecutable() }
+        .onDisappear { draggedID = nil; dropTarget = nil }
+    }
+}
+
+@MainActor
+private struct AccountOrderTarget: ViewModifier {
+    let targetID: String
+    let enabled: Bool
+    @Binding var draggedID: String?
+    @Binding var target: String?
+    @Binding var after: Bool
+    let ids: [String]
+    let accounts: AccountManagementModel
+    @ViewState private var height: CGFloat = 44
+
+    func body(content: Content) -> some View {
+        content.background {
+            GeometryReader { geometry in
+                Color.clear
+                    .onAppear { height = geometry.size.height }
+                    .onChange(of: geometry.size.height) { _, value in height = value }
+            }
+        }
+        .onDrop(of: [accountOrderType], delegate: AccountOrderDrop(
+            targetID: targetID, height: height, enabled: enabled,
+            draggedID: $draggedID, target: $target, after: $after,
+            ids: ids, accounts: accounts))
+    }
+}
+
+private let accountOrderType = UTType(exportedAs: "dev.codexpulse.account-order")
+
+@MainActor
+private struct AccountOrderDrop: DropDelegate {
+    let targetID: String
+    let height: CGFloat
+    let enabled: Bool
+    @Binding var draggedID: String?
+    @Binding var target: String?
+    @Binding var after: Bool
+    let ids: [String]
+    let accounts: AccountManagementModel
+
+    func validateDrop(info: DropInfo) -> Bool {
+        enabled && draggedID != nil && draggedID != targetID &&
+            info.hasItemsConforming(to: [accountOrderType])
+    }
+
+    func dropEntered(info: DropInfo) { update(info) }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        guard validateDrop(info: info) else { return DropProposal(operation: .forbidden) }
+        update(info)
+        return DropProposal(operation: .move)
+    }
+
+    func dropExited(info: DropInfo) {
+        if target == targetID { target = nil }
+    }
+
+    func performDrop(info: DropInfo) -> Bool {
+        guard validateDrop(info: info), let source = draggedID else { return false }
+        let reordered = AccountManagementModel.reorderedIDs(ids, moving: source, relativeTo: targetID,
+                                                           after: info.location.y >= height / 2)
+        draggedID = nil
+        target = nil
+        Task { await accounts.reorder(reordered) }
+        return true
+    }
+
+    private func update(_ info: DropInfo) {
+        guard validateDrop(info: info) else { return }
+        target = targetID
+        after = info.location.y >= height / 2
     }
 }

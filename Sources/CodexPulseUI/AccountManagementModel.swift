@@ -14,18 +14,21 @@ public final class AccountManagementModel: ObservableObject {
     private let addAccount: @Sendable () async throws -> ManagedAccount
     private let loginAccount: @Sendable (String, Bool, LoginCancellation) async throws -> Void
     private let removeAccount: @Sendable (String) async throws -> Void
+    private let saveDisplayOrder: @Sendable ([String]) async throws -> Void
     private var cancellation: LoginCancellation?
 
     public init(menu: MenuBarModel,
                 resolveExecutable: @escaping @Sendable () throws -> URL,
                 addAccount: @escaping @Sendable () async throws -> ManagedAccount,
                 loginAccount: @escaping @Sendable (String, Bool, LoginCancellation) async throws -> Void,
-                removeAccount: @escaping @Sendable (String) async throws -> Void) {
+                removeAccount: @escaping @Sendable (String) async throws -> Void,
+                saveDisplayOrder: @escaping @Sendable ([String]) async throws -> Void = { _ in throw AccountError.storageFailure }) {
         self.menu = menu
         self.resolveExecutable = resolveExecutable
         self.addAccount = addAccount
         self.loginAccount = loginAccount
         self.removeAccount = removeAccount
+        self.saveDisplayOrder = saveDisplayOrder
         checkExecutable()
     }
 
@@ -44,6 +47,8 @@ public final class AccountManagementModel: ObservableObject {
                 }.value
             }, removeAccount: { id in
                 try await Task.detached { try store.remove(id: id) }.value
+            }, saveDisplayOrder: { ids in
+                try await Task.detached { try store.setDisplayOrder(ids) }.value
             })
     }
 
@@ -81,6 +86,26 @@ public final class AccountManagementModel: ObservableObject {
             message = PulseLocalization.text("account.removed")
         } catch { handle(error) }
         await finish()
+    }
+
+    public static func reorderedIDs(_ ids: [String], moving source: String, relativeTo target: String,
+                                    after: Bool) -> [String] {
+        guard source != target, ids.contains(source), ids.contains(target) else { return ids }
+        var reordered = ids.filter { $0 != source }
+        guard let index = reordered.firstIndex(of: target) else { return ids }
+        reordered.insert(source, at: index + (after ? 1 : 0))
+        return reordered
+    }
+
+    public func reorder(_ ids: [String]) async {
+        guard ids != menu.rows.map(\.id) else { return }
+        guard Set(ids).count == ids.count, Set(ids) == Set(menu.rows.map(\.id)), begin() else { return }
+        do {
+            try await saveDisplayOrder(ids)
+            menu.applyDisplayOrder(ids)
+        } catch { handle(error) }
+        menu.endAccountReordering()
+        isBusy = false
     }
 
     public func cancelLogin() {

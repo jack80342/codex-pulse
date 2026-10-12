@@ -40,6 +40,7 @@ public struct ManagedAccount: Codable, Equatable, Sendable {
 private struct AccountRegistry: Codable {
     var schemaVersion = 1
     var accounts: [ManagedAccount] = []
+    var displayOrder: [String]?
 }
 
 enum PrivateStorage {
@@ -146,6 +147,28 @@ public struct AccountStore: Sendable {
 
     public func list() throws -> [ManagedAccount] { try locked { $0.accounts } }
 
+    /// 展示顺序独立于账号/自动调度顺序；旧配置沿用原顺序。
+    public func displayAccounts() throws -> [ManagedAccount] {
+        try locked { registry in
+            let accounts = Dictionary(uniqueKeysWithValues: registry.accounts.map { ($0.id, $0) })
+            var seen = Set<String>()
+            let ids = (registry.displayOrder ?? []) + registry.accounts.map(\.id)
+            return ids.compactMap { id in
+                guard seen.insert(id).inserted else { return nil }
+                return accounts[id]
+            }
+        }
+    }
+
+    public func setDisplayOrder(_ ids: [String]) throws {
+        try locked { registry in
+            guard Set(ids).count == ids.count,
+                  Set(ids) == Set(registry.accounts.map(\.id)) else { throw AccountError.busy }
+            registry.displayOrder = ids
+            try save(registry)
+        }
+    }
+
     @discardableResult
     public func add(name: String, id: String = UUID().uuidString.lowercased(),
                     usesGeneratedName: Bool? = nil) throws -> ManagedAccount {
@@ -203,6 +226,7 @@ public struct AccountStore: Sendable {
                 catch { throw AccountError.storageFailure }
             } else if errno != ENOENT { throw AccountError.storageFailure }
             registry.accounts.remove(at: index)
+            registry.displayOrder?.removeAll { $0 == id }
             try save(registry)
         }
     }

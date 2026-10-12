@@ -129,3 +129,5 @@
 "update.error.timeout" = "检查更新超时，请重试。";
 "update.error.rateLimit" = "GitHub 请求已达到限额，请稍后重试。";
 "update.error.http" = "检查更新失败（HTTP %ld），请稍后重试。";
+
+"account.reorder" = "拖动调整账号顺序";

@@ -10,6 +10,39 @@ struct AccountTests {
     }
 
     @Test
+    func displayOrderPersistsWithoutChangingCanonicalOrderAndTracksAddRemove() throws {
+        try withStore { store in
+            for id in ["a", "b", "c"] { try store.add(name: id, id: id) }
+            #expect(try store.displayAccounts().map(\.id) == ["a", "b", "c"])
+            try store.setDisplayOrder(["c", "a", "b"])
+            let reopened = AccountStore(root: store.root)
+            #expect(try reopened.displayAccounts().map(\.id) == ["c", "a", "b"])
+            #expect(try reopened.list().map(\.id) == ["a", "b", "c"])
+            try reopened.add(name: "d", id: "d")
+            #expect(try reopened.displayAccounts().map(\.id) == ["c", "a", "b", "d"])
+            try reopened.remove(id: "a")
+            #expect(try reopened.displayAccounts().map(\.id) == ["c", "b", "d"])
+        }
+    }
+
+    @Test
+    func staleOrDuplicateOrderCannotOverwriteConcurrentAccountChanges() throws {
+        try withStore { store in
+            try store.add(name: "a", id: "a")
+            try store.add(name: "b", id: "b")
+            try store.setDisplayOrder(["b", "a"])
+            let path = store.root.appendingPathComponent("account-list.json")
+            let before = try Data(contentsOf: path)
+            expectThrows(try store.setDisplayOrder(["a", "a"]))
+            expectThrows(try store.setDisplayOrder(["a", "unknown"]))
+            #expect(try Data(contentsOf: path) == before)
+            try store.add(name: "c", id: "c")
+            expectThrows(try store.setDisplayOrder(["a", "b"]))
+            #expect(try store.displayAccounts().map(\.id) == ["b", "a", "c"])
+        }
+    }
+
+    @Test
     func generatedNameMetadataIsOptionalAndRenamePreservesCustomAliases() throws {
         try withStore { store in
             let legacy = try store.add(name: "legacy", id: "legacy")

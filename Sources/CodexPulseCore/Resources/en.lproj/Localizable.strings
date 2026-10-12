@@ -129,3 +129,5 @@
 "update.error.timeout" = "Update check timed out. Please try again.";
 "update.error.rateLimit" = "GitHub request limit reached. Please try again later.";
 "update.error.http" = "Update check failed (HTTP %ld). Please try again later.";
+
+"account.reorder" = "Drag to reorder accounts";

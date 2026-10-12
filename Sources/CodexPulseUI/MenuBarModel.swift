@@ -68,7 +68,7 @@ public final class MenuBarModel: ObservableObject {
 
     public static func live(store: AccountStore = AccountStore()) -> MenuBarModel {
         MenuBarModel(readAccounts: {
-            try await Task.detached(priority: .userInitiated) { try store.list() }.value
+            try await Task.detached(priority: .userInitiated) { try store.displayAccounts() }.value
         }, readStatuses: {
             try await Task.detached(priority: .userInitiated) {
                 let executable = try CodexExecutable.resolve()
@@ -189,6 +189,21 @@ public final class MenuBarModel: ObservableObject {
         guard let index = rows.firstIndex(where: { $0.id == id }) else { return }
         rows[index] = MenuAccountRow(account: rows[index].account)
         automaticResults.removeValue(forKey: id)
+    }
+
+    public func applyDisplayOrder(_ ids: [String]) {
+        let saved = Dictionary(uniqueKeysWithValues: rows.map { ($0.id, $0) })
+        rows = ids.compactMap { saved[$0] }
+    }
+
+    public func endAccountReordering() {
+        isManagingAccounts = false
+        if recoveryPending || automaticResults.values.compactMap(\.nextRequestAt).contains(where: { $0 <= now() }) {
+            recoveryPending = false
+            Task { await self.refresh() }
+        } else {
+            scheduleNextCheck()
+        }
     }
 
     public func endAccountManagement() async {

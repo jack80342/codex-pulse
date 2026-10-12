@@ -86,8 +86,20 @@ public struct MenuBarPanel: View {
                 Label(PulseLocalization.text("ui.duplicates", model.duplicateNames.joined(separator: PulseLocalization.text("status.nameSeparator"))), systemImage: "person.2")
                     .font(.caption).foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true)
             }
-            DisclosureGroup(PulseLocalization.text("ui.manageAccounts"), isExpanded: $managing) {
-                AccountManagementPanel(accounts: accounts, menu: model).padding(.top, 8)
+            VStack(alignment: .leading, spacing: 0) {
+                Button { managing.toggle() } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: managing ? "chevron.down" : "chevron.right")
+                            .font(.caption).foregroundStyle(.secondary)
+                        Text(PulseLocalization.text("ui.manageAccounts"))
+                        Spacer()
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                if managing {
+                    AccountManagementPanel(accounts: accounts, menu: model).padding(.top, 8)
+                }
             }
             Divider()
             Toggle(PulseLocalization.text("ui.launchAtLogin"), isOn: Binding(get: { loginItem.isEnabled }, set: { enabled in

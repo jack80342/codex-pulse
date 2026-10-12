@@ -11,8 +11,19 @@ private actor ManagementFixture {
     var queries = 0
     var automaticCalls = 0
     var forced = false
+    var savedOrder: [String]?
+    var reorderFails = false
+    var scheduledOrder: [String] = []
 
-    func list() -> [ManagedAccount] { accounts }
+    func list() -> [ManagedAccount] {
+        let map = Dictionary(uniqueKeysWithValues: accounts.map { ($0.id, $0) })
+        return savedOrder?.compactMap { map[$0] } ?? accounts
+    }
+    func saveOrder(_ ids: [String]) throws {
+        if reorderFails { throw AccountError.storageFailure }
+        savedOrder = ids
+    }
+    func failReordering() { reorderFails = true }
     func statuses() -> [AccountStatus] {
         queries += 1
         return accounts.map {
@@ -39,6 +50,7 @@ private actor ManagementFixture {
     func failRemoval() { removalFails = true }
     func automatic() -> [AutomaticRequestResult] {
         automaticCalls += 1
+        scheduledOrder = accounts.map(\.id)
         return accounts.map { AutomaticRequestResult(accountID: $0.id, message: "等待", nextRequestAt: Date().addingTimeInterval(300)) }
     }
 }
@@ -66,6 +78,71 @@ private actor ManagementLoginGate {
 @MainActor
 struct AccountManagementTests {
     @Test
+    func dropPositionsSupportMovingUpDownAndToEnds() {
+        let ids = ["a", "b", "c"]
+        #expect(AccountManagementModel.reorderedIDs(ids, moving: "c", relativeTo: "a", after: false) == ["c", "a", "b"])
+        #expect(AccountManagementModel.reorderedIDs(ids, moving: "a", relativeTo: "c", after: true) == ["b", "c", "a"])
+        #expect(AccountManagementModel.reorderedIDs(ids, moving: "c", relativeTo: "a", after: true) == ["a", "c", "b"])
+        #expect(AccountManagementModel.reorderedIDs(ids, moving: "a", relativeTo: "a", after: true) == ids)
+        #expect(AccountManagementModel.reorderedIDs(ids, moving: "external", relativeTo: "b", after: true) == ids)
+    }
+
+    @Test
+    func reorderUpdatesBothViewsWithoutQueryingOrRequestingAndRefreshKeepsScheduleOrder() async {
+        let fixture = ManagementFixture()
+        let menu = menu(fixture)
+        let manager = manager(fixture, menu: menu)
+        for _ in 1...3 { await manager.add() }
+        let original = menu.rows.map(\.id)
+        let queries = await fixture.queries
+        let automatic = await fixture.automaticCalls
+        await manager.reorder(Array(original.reversed()))
+        #expect(menu.rows.map(\.id) == Array(original.reversed()))
+        #expect(await fixture.queries == queries)
+        #expect(await fixture.automaticCalls == automatic)
+        #expect(!manager.isBusy && !menu.isManagingAccounts)
+        #expect(menu.nextAutomaticCheckAt != nil)
+        await menu.refresh()
+        #expect(menu.rows.map(\.id) == Array(original.reversed()))
+        #expect(await fixture.scheduledOrder == original)
+        let restarted = self.menu(fixture)
+        await restarted.startIfNeeded()
+        #expect(restarted.rows.map(\.id) == Array(original.reversed()))
+    }
+
+    @Test
+    func failedReorderKeepsOriginalRowsAndReportsError() async {
+        let fixture = ManagementFixture()
+        let menu = menu(fixture)
+        let manager = manager(fixture, menu: menu)
+        for _ in 1...2 { await manager.add() }
+        let original = menu.rows.map(\.id)
+        await fixture.failReordering()
+        await manager.reorder(Array(original.reversed()))
+        #expect(menu.rows.map(\.id) == original)
+        #expect(manager.error == AccountError.storageFailure.description)
+        #expect(!manager.isBusy && !menu.isManagingAccounts)
+    }
+
+    @Test
+    func reorderingIsBlockedDuringLogin() async {
+        let fixture = ManagementFixture()
+        let menu = menu(fixture)
+        let manager = manager(fixture, menu: menu)
+        for _ in 1...2 { await manager.add() }
+        let gate = ManagementLoginGate()
+        let blocked = self.manager(fixture, menu: menu, gate: gate)
+        let original = menu.rows.map(\.id)
+        let running = Task { await blocked.login(id: original[0]) }
+        await gate.waitUntilStarted()
+        await blocked.reorder(Array(original.reversed()))
+        #expect(await fixture.savedOrder == nil)
+        await gate.finish()
+        await running.value
+        #expect(menu.rows.map(\.id) == original)
+    }
+
+    @Test
     func generatedPendingLabelsAreLocalizedWithoutChangingTheStoredName() async {
         let id = "a1234567-b123-4123-8123-a12345678901"
         let account = ManagedAccount(id: id, name: id, usesGeneratedName: true)
@@ -90,7 +167,8 @@ struct AccountManagementTests {
             loginAccount: { id, force, token in
                 if let gate { try await gate.wait(token) }
                 try await fixture.login(id, force: force)
-            }, removeAccount: { try await fixture.remove($0) })
+            }, removeAccount: { try await fixture.remove($0) },
+            saveDisplayOrder: { try await fixture.saveOrder($0) })
     }
 
     @Test
