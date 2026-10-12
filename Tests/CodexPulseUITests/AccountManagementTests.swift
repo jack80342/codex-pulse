@@ -78,6 +78,20 @@ private actor ManagementLoginGate {
 @MainActor
 struct AccountManagementTests {
     @Test
+    func localDragCoordinatesSelectInsertionAcrossRowsAndGaps() {
+        let frames = ["a": CGRect(x: 0, y: 0, width: 300, height: 40),
+                      "b": CGRect(x: 0, y: 48, width: 300, height: 40),
+                      "c": CGRect(x: 0, y: 96, width: 300, height: 40)]
+        let first = AccountManagementModel.insertionTarget(at: -5, frames: frames, excluding: "c")
+        #expect(first?.id == "a" && first?.after == false)
+        let last = AccountManagementModel.insertionTarget(at: 150, frames: frames, excluding: "a")
+        #expect(last?.id == "c" && last?.after == true)
+        let gap = AccountManagementModel.insertionTarget(at: 90, frames: frames, excluding: "a")
+        #expect(gap?.id == "b" && gap?.after == true)
+        #expect(AccountManagementModel.insertionTarget(at: 0, frames: ["a": frames["a"]!], excluding: "a") == nil)
+    }
+
+    @Test
     func dropPositionsSupportMovingUpDownAndToEnds() {
         let ids = ["a", "b", "c"]
         #expect(AccountManagementModel.reorderedIDs(ids, moving: "c", relativeTo: "a", after: false) == ["c", "a", "b"])

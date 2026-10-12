@@ -88,6 +88,13 @@ public final class AccountManagementModel: ObservableObject {
         await finish()
     }
 
+    public static func insertionTarget(at y: CGFloat, frames: [String: CGRect], excluding source: String)
+        -> (id: String, after: Bool)? {
+        let candidates = frames.filter { $0.key != source }.sorted { $0.value.midY < $1.value.midY }
+        guard let nearest = candidates.min(by: { abs($0.value.midY - y) < abs($1.value.midY - y) }) else { return nil }
+        return (nearest.key, y >= nearest.value.midY)
+    }
+
     public static func reorderedIDs(_ ids: [String], moving source: String, relativeTo target: String,
                                     after: Bool) -> [String] {
         guard source != target, ids.contains(source), ids.contains(target) else { return ids }

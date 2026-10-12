@@ -1,6 +1,6 @@
 # 第九阶段：账号展示排序与管理标题点击（0.9.0）
 
-日期：2026-10-12。版本 0.9.0，构建号 17；本次本机交付，尚未新增 GitHub Release。
+日期：2026-10-12。当前版本 0.9.0，构建号 18；本次本机交付，尚未新增 GitHub Release。
 
 ## 行为与兼容
 
@@ -31,7 +31,7 @@
 - `Resources/Info.plist`
 - `docs/design-plan.md`、本文件、桌面原方案 MD。
 
-## 本机签名与交付
+## 首次本机签名与交付（构建 17，已由下方修复版替换）
 
 最终版本 0.9.0（17）已安装到 `/Applications/Codex Pulse.app` 并启动，保留原账号数据。应用及 DMG 均获 Apple Accepted，两份日志 `issues:null`；严格签名、附加公证凭证、应用分发检查与 DMG 完整性通过。本机原 Gatekeeper 评估关闭，不据此声称默认 Gatekeeper 首次打开验收通过。
 
@@ -42,3 +42,17 @@
 - 日志与中英文渲染：`.build/account-order-qa/`；最终公证工作目录 `.build/notarization.mqFWpd/`。
 
 桌面工具首次读取已安装应用成功，识别三个原账号、拖动手柄和“管理账号”按钮；随后点击被状态变化保护拒绝，重新获取应用状态超时，因此未完成鼠标拖动及标题点击的自动验收。未通过其他输入工具绕过；需用户实际确认交互。尚未新增 GitHub Release。
+
+## 拖动无效反馈与修复（2026-10-12）
+
+用户反馈构建 17 拖动无效。旧实现仅手柄启动系统 NSItemProvider/DropDelegate 拖放，账号名称不能拖动；真实菜单栏拖放回调未成功验收。改用面板内部 DragGesture，覆盖左侧手柄及账号名称区域，采用同一命名坐标系获取行位置，按鼠标纵坐标显示插入线并在松手后保存。移除系统拖放类型/会话依赖；右侧登录/删除按钮仍独立，存储和调度不变。标题整行展开/收起继续保留。
+
+修复版 0.9.0（18），116 项测试通过（Core 68、UI 48），新增覆盖行坐标、跨行/间隙和首尾插入计算。此前模型测试通过没有证明真实鼠标拖放可用；最终交互仍需实际验收。
+
+修复版应用及 DMG 已再次签名、公证（Accepted，issues:null）、附加票据并验证；已安装并启动 0.9.0（18），保留账号数据。本地包仍未发布 GitHub Release。
+
+- 应用公证 ID：`0950d67e-c73f-4302-9020-f306d698dc08`
+- DMG 公证 ID：`05c6a025-dcbb-4db0-a486-2c2097e67fef`
+- 最终工作目录：`.build/notarization.fRltUy/`
+- 最终 DMG SHA-256：`c69e43a470156cc7d18c85c181a803f545f234bebecf79a23fa9123aca8dd4df`
+- 最终测试/安装日志：`.build/account-order-qa/tests-local-drag.log`、`install-local-drag.log`；渲染 `zh-local-drag.png`、`en-local-drag.png`。
