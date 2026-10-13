@@ -1,6 +1,6 @@
 # 第九阶段：账号展示排序与管理标题点击（0.9.0）
 
-日期：2026-10-12。当前版本 0.9.0，构建号 18；本次本机交付，尚未新增 GitHub Release。
+日期：2026-10-12。当前版本 0.9.0，构建号 18；2026-10-12 完成本机交付，2026-10-13 已正式发布 GitHub Release。
 
 ## 行为与兼容
 
@@ -56,3 +56,15 @@
 - 最终工作目录：`.build/notarization.fRltUy/`
 - 最终 DMG SHA-256：`c69e43a470156cc7d18c85c181a803f545f234bebecf79a23fa9123aca8dd4df`
 - 最终测试/安装日志：`.build/account-order-qa/tests-local-drag.log`、`install-local-drag.log`；渲染 `zh-local-drag.png`、`en-local-drag.png`。
+
+## 正式发布（2026-10-13）
+
+用户在上传后的 GitHub 草稿页面完成发布。[v0.9.0](https://github.com/jack80342/codex-pulse/releases/tag/v0.9.0) 已核对为 Latest 正式版本，公开 API 确认 draft=false、prerelease=false、发布时刻为 2026-10-13 11:11:14（Asia/Shanghai）。标签解引用提交 `fa98b9e568a38f46c608980201edce371df743a4`，安装包版本 0.9.0（18）。
+
+公开资产为 `Codex-Pulse-0.9.0.dmg`（1,306,902 bytes）与 `SHA256SUMS.txt`。GitHub 资产摘要与本地 SHA-256 相同，校验文件下载后与本地逐字节一致，线上中英文说明与 `docs/releases/v0.9.0.md` 一致；latest API 返回 v0.9.0。内部测试与验收记录保留于本文件，Release 说明不包含验证长段。
+
+本轮重新验证本地 DMG 及其中应用的严格签名、公证票据和版本，无认证文件或账号列表打包；不重建已验收包、不移动发布标签。本机关闭 Gatekeeper、未在另一台默认设置 Mac 首次启动的既有验证边界继续保留。
+
+发布后 DMG 下载首次超时、一次续传连接被重置；随后续传成功，完整下载包与本地正式包逐字节相同，下载包的附加公证票据验证通过。该网络问题未影响正式发布。
+
+证据：`.build/release-0.9.0-qa/` 保存公开 API 响应、下载资产和校验文件。

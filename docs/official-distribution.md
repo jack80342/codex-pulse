@@ -60,7 +60,7 @@ Apple 流程参考：[自定义公证工作流](https://developer.apple.com/docu
 
 0.8.0（构建号 12）已完成签名、公证、凭证附加、本地安装包校验与应用替换；本次未新增 GitHub Release。更新检查及本次验证限制见 [第七阶段说明](phase-7-update-check.md)。
 
-## 最新发布：0.8.3（2026-10-02）
+## 正式发布：0.8.3（2026-10-02）
 
 [Codex Pulse 0.8.3](https://github.com/jack80342/codex-pulse/releases/tag/v0.8.3) 已发布为 Latest 正式版本，标签 `v0.8.3` 指向 `47a693ae8d310f82b46c5f428b0d0d3905d6daed`。包含手动检查更新、右上角更多菜单、版本信息置底及应用图标。
 
@@ -75,3 +75,14 @@ Apple 流程参考：[自定义公证工作流](https://developer.apple.com/docu
 发布后的 GitHub 最新版本 API 请求暂时返回 HTTP 403、`X-RateLimit-Remaining: 0`，因此未将此时应用内检查更新的成功路径列为已通过。公开发布页与安装包下载验证通过；本版本尚未在另一台默认 Gatekeeper 设置的 Mac 重新验证首次启动。
 
 发布说明源文件：`docs/releases/v0.8.3.md`。下载验证及发布截图保存在 `.build/release-0.8.3-qa/`。
+
+## 最新发布：0.9.0（2026-10-13）
+
+[Codex Pulse 0.9.0](https://github.com/jack80342/codex-pulse/releases/tag/v0.9.0) 已正式发布为 Latest。版本 0.9.0、构建号 18，包含账号拖动展示排序及管理标题整行展开/收起；用户实际确认两项交互正常，116 项测试通过。标签 `v0.9.0` 指向 `fa98b9e568a38f46c608980201edce371df743a4`。
+
+- [DMG](https://github.com/jack80342/codex-pulse/releases/download/v0.9.0/Codex-Pulse-0.9.0.dmg)：1,306,902 bytes。
+- SHA-256：`c69e43a470156cc7d18c85c181a803f545f234bebecf79a23fa9123aca8dd4df`。
+- [SHA256SUMS.txt](https://github.com/jack80342/codex-pulse/releases/download/v0.9.0/SHA256SUMS.txt)。
+- 应用公证 ID：`0950d67e-c73f-4302-9020-f306d698dc08`；DMG 公证 ID：`05c6a025-dcbb-4db0-a486-2c2097e67fef`。
+
+应用及 DMG 均 Apple Accepted，issues:null，并附加票据。发布前再次验证签名、票据、DMG 内应用版本及无账号数据；发布后确认 GitHub 资产摘要、校验文件及发布说明一致；下载 DMG 与本地正式包逐字节相同且票据验证通过，latest API 返回 v0.9.0。详细证据与交互验收见 `docs/phase-9-account-order.md`；发布说明源文件 `docs/releases/v0.9.0.md`。当前 Mac Gatekeeper 全局评估关闭，未将本轮校验等同另一台默认设置 Mac 首次启动验收。
