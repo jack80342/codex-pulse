@@ -92,4 +92,12 @@ Release 构建通过。Apple 公证前置检查曾返回协议 403；用户本�
 
 已通过暂存、严格签名和票据校验、失败回滚保护替换 `/Applications/Codex Pulse.app`，确认版本 0.9.1（19）并启动；替换期间账号列表及检查点摘要一致。启动仅执行后台规则，未自动使用手动补试预算。
 
-证据位于 `.build/manual-retry-qa/`：tests.log、build.log、notarization-final.log、install.log。真实账号点击补试是否成功仍待用户实际验收，本轮没有自动执行手动补试、没有借测试消耗真实账号额度；后续用户已授权提交、推送与发布，发布进度按实际结果更新。原桌面方案路径 `/Users/j/Desktop/work/Codex多账号额度小组件推荐方案.md` 已不存在，未擅自重建，只更新仓库方案。
+证据位于 `.build/manual-retry-qa/`：tests.log、build.log、notarization-final.log、install.log。真实账号点击补试是否成功仍待用户实际验收，本轮没有自动执行手动补试、没有借测试消耗真实账号额度；2026-11-16 已按用户授权提交、推送并发布，见下方正式发布记录。原桌面方案路径 `/Users/j/Desktop/work/Codex多账号额度小组件推荐方案.md` 已不存在，未擅自重建，只更新仓库方案。
+
+### 0.9.1 正式发布（2026-11-16）
+
+[Codex Pulse 0.9.1](https://github.com/jack80342/codex-pulse/releases/tag/v0.9.1) 已于 2026-11-16 16:37:39（Asia/Shanghai）发布为 Latest 正式版。标签 v0.9.1 指向 `1db597b5f6a2098129413497b5f145b18ad54566`；版本 0.9.1、构建号 19。发布说明在 `docs/releases/v0.9.1.md`，保持简短中英文，不包含验证长段。
+
+DMG（1,311,804 bytes）及 SHA256SUMS.txt 已上传。上传资产的大小、GitHub digest 与本地校验一致；发布后下载两文件逐字节比较通过，下载 DMG 的 stapler validate 通过；latest API 返回 v0.9.1（draft=false、prerelease=false）。证据保存在 `.build/release-0.9.1-qa/`。
+
+内置浏览器连续超时后切换 GitHub CLI。用户完成标准设备授权，CLI 沿用 macOS 已有回环代理并使用 HTTP/1.1 后认证和发布成功；未修改系统代理、安全配置或提取浏览器 Cookie。草稿确认两资产 uploaded 后发布，未重复创建 Release、未覆盖公开标签。以上为分发验证，不替代真实账号的手动补试成功验收。

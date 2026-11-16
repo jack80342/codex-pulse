@@ -45,6 +45,8 @@
 
 参考：[Codex App Server 额度接口](https://learn.chatgpt.com/docs/app-server)、[套餐额度说明](https://learn.chatgpt.com/docs/pricing)、[官方五小时窗口规则](https://help.openai.com/en/articles/20001516-managing-usage-with-gpt-6-astra-in-work-and-codex)。
 
+2026-11-16：手动刷新限次补试已实现并发布 [0.9.1（19）](https://github.com/jack80342/codex-pulse/releases/tag/v0.9.1)，验证与风险见 `docs/phase-4-automatic-requests.md`。
+
 ### 1.2 检查更新
 
 菜单栏面板标题右上角的“⋯”菜单提供“检查更新”及“退出”；底部保留“立即刷新”和上次查询时间，版本信息与更新结果在查询时间下方的面板最底部按需显示。用户点击后查询 GitHub 最新正式 Release，与当前安装版本按数字比较；有新版时显示版本号，并提供“查看更新”和“下载安装包”入口。没有新版时显示当前版本已是最新；网络、限流或返回数据异常时明确提示并可重试。无安装包时仅提供更新说明。只手动检查，不自动下载或安装，不使用任何 Codex 账号凭据。0.8.0 已实现，验证及交付详情见 `docs/phase-7-update-check.md`。
