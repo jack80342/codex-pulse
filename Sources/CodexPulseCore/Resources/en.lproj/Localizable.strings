@@ -131,3 +131,5 @@
 "update.error.http" = "Update check failed (HTTP %ld). Please try again later.";
 
 "account.reorder" = "Drag to reorder accounts";
+
+"automatic.manualRetryUsed" = "One retry used for this window; waiting for reset";

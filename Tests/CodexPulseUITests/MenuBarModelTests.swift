@@ -82,6 +82,33 @@ struct MenuBarModelTests {
     }
 
     @Test
+    func onlyExplicitRefreshUsesManualRetryOperation() async throws {
+        let entry = try status("a")
+        let normal = AutomaticGate()
+        let manual = AutomaticGate()
+        let model = MenuBarModel(readAccounts: { [entry.account] }, readStatuses: { [entry] },
+            runAutomatic: { _ in await normal.run() }, runManualAutomatic: { _ in await manual.run() })
+        let startup = Task { await model.startIfNeeded() }
+        await normal.waitUntilStarted()
+        await normal.finish([])
+        await startup.value
+        #expect(await manual.calls == 0)
+        let explicit = Task { await model.refresh(allowManualRetry: true) }
+        await manual.waitUntilStarted()
+        // 重复点击不会排队请求。
+        await model.refresh(allowManualRetry: true)
+        #expect(await manual.calls == 1)
+        await manual.finish([])
+        await explicit.value
+        let waking = Task { await model.resumeAfterWake() }
+        await normal.waitUntilStarted()
+        await normal.finish([])
+        await waking.value
+        #expect(await normal.calls == 2)
+        #expect(await manual.calls == 1)
+    }
+
+    @Test
     func automaticResultsUpdateQuotaAndScheduleEarliestServerReset() async throws {
         let first = try status("a", username: "profile-a")
         let loader = FixtureLoader([first, try status("b"), try status("free", used: nil)])

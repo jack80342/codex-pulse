@@ -24,6 +24,7 @@ private struct AutomaticCheckpoint: Codable {
     let attemptedAt: Date
     var nextReset: Int64?
     var outcome: String
+    var manualRetryUsed: Bool?
 }
 
 /// 每个账号的查询、检查点写入和最小请求共用账号租约，防止跨进程重复请求。
@@ -48,7 +49,7 @@ public struct AutomaticRequestService: Sendable {
         self.makeClient = makeClient
     }
 
-    public func run(statuses: [AccountStatus]) async -> [AutomaticRequestResult] {
+    public func run(statuses: [AccountStatus], allowManualRetry: Bool = false) async -> [AutomaticRequestResult] {
         var seen = Set<String>()
         var permitted = Set<String>()
         for status in statuses where status.state == "loggedIn" {
@@ -64,7 +65,7 @@ public struct AutomaticRequestService: Sendable {
                         message: status.state == "loggedIn" && status.snapshot?.identityDigest != nil
                             ? PulseLocalization.text("automatic.duplicate") : PulseLocalization.text("automatic.unknownAccount")))
                 }
-                return (index, process(id: status.account.id, expectedIdentity: identity))
+                return (index, process(id: status.account.id, expectedIdentity: identity, allowManualRetry: allowManualRetry))
             }
             var iterator = statuses.enumerated().makeIterator()
             for _ in 0..<3 {
@@ -79,7 +80,7 @@ public struct AutomaticRequestService: Sendable {
         }
     }
 
-    public func process(id: String, expectedIdentity: String) -> AutomaticRequestResult {
+    public func process(id: String, expectedIdentity: String, allowManualRetry: Bool = false) -> AutomaticRequestResult {
         do {
             return try store.withAccount(id: id) { account, paths in
                 let client = try makeClient(paths)
@@ -106,24 +107,33 @@ public struct AutomaticRequestService: Sendable {
                 }
                 do { try snapshot.validateForProbe(limitID: "codex") }
                 catch { return result(id, message(error), snapshot, checkpoint) }
+                var isManualRetry = false
                 if var saved = checkpoint {
                     if saved.nextReset == nil {
-                        // 崩溃或超时可能已发出请求；只采纳新读取的服务端窗口，不补发。
+                        // 崩溃或超时可能已发出请求；后台只采纳新窗口等待，手动补试另行检查预算。
                         saved.nextReset = future(reset, at: date).map { Int64($0.timeIntervalSince1970) }
                         try save(saved, to: checkpointURL)
-                        return result(id, saved.outcome == "completed" ? PulseLocalization.text("automatic.completedWaiting") : PulseLocalization.text("automatic.unconfirmedWaiting"), snapshot, saved,
-                                      next: future(reset, at: date))
+                        // 无已知窗口时仅在读到未来服务端重置后才允许一次手动补试。
+                        if !(allowManualRetry && saved.outcome != "completed" && saved.manualRetryUsed != true && saved.nextReset != nil) {
+                            return result(id, waitingMessage(saved, resetUnknown: true), snapshot, saved,
+                                          next: future(reset, at: date))
+                        }
                     }
                     if let nextReset = saved.nextReset, Double(nextReset) > date.timeIntervalSince1970 {
                         let next = future(reset, at: date) ?? Date(timeIntervalSince1970: Double(nextReset))
                         saved.nextReset = Int64(next.timeIntervalSince1970)
                         try save(saved, to: checkpointURL)
-                        return result(id, saved.outcome == "completed" ? PulseLocalization.text("automatic.ready") : PulseLocalization.text("automatic.unconfirmed"),
-                                      snapshot, saved, next: next)
+                        guard allowManualRetry, saved.outcome != "completed", saved.manualRetryUsed != true else {
+                            return result(id, waitingMessage(saved), snapshot, saved, next: next)
+                        }
+                        isManualRetry = true
+                        checkpoint = saved
                     }
                 }
                 var attempt = AutomaticCheckpoint(createdAt: account.createdAt, identityDigest: expectedIdentity,
-                    attemptedAt: date, nextReset: future(reset, at: date).map { Int64($0.timeIntervalSince1970) }, outcome: "pending")
+                    attemptedAt: date,
+                    nextReset: isManualRetry ? checkpoint?.nextReset : future(reset, at: date).map { Int64($0.timeIntervalSince1970) },
+                    outcome: "pending", manualRetryUsed: isManualRetry ? true : nil)
                 // 必须先写入检查点；写入失败时不发送模型请求。
                 try save(attempt, to: checkpointURL)
                 do {
@@ -141,7 +151,7 @@ public struct AutomaticRequestService: Sendable {
                     return result(id, attempt.nextReset == nil ? PulseLocalization.text("automatic.completedResetUnknown") : PulseLocalization.text("automatic.completed"),
                                   after, attempt, next: attempt.nextReset.map { Date(timeIntervalSince1970: Double($0)) })
                 } catch {
-                    // 失败也留下已尝试记录；同一窗口不重试，不输出原始错误或响应。
+                    // 失败保留尝试和补试预算；后台不重试，不输出原始错误或响应。
                     attempt.outcome = "incomplete"
                     try save(attempt, to: checkpointURL)
                     return result(id, message(error), snapshot, attempt,
@@ -151,6 +161,15 @@ public struct AutomaticRequestService: Sendable {
         } catch {
             return AutomaticRequestResult(accountID: id, message: message(error))
         }
+    }
+
+    private func waitingMessage(_ checkpoint: AutomaticCheckpoint, resetUnknown: Bool = false) -> String {
+        if checkpoint.outcome != "completed", checkpoint.manualRetryUsed == true {
+            return PulseLocalization.text("automatic.manualRetryUsed")
+        }
+        return PulseLocalization.text(checkpoint.outcome == "completed"
+            ? (resetUnknown ? "automatic.completedWaiting" : "automatic.ready")
+            : (resetUnknown ? "automatic.unconfirmedWaiting" : "automatic.unconfirmed"))
     }
 
     private func result(_ id: String, _ text: String, _ snapshot: QuotaSnapshot,

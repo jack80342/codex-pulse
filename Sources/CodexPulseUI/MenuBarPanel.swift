@@ -122,7 +122,7 @@ public struct MenuBarPanel: View {
             }
             HStack {
                 Button {
-                    Task { await model.refresh() }
+                    Task { await model.refresh(allowManualRetry: true) }
                 } label: { Label(PulseLocalization.text("ui.refresh"), systemImage: "arrow.clockwise") }
                 .disabled(model.isRefreshing || accounts.isBusy)
                 .keyboardShortcut("r", modifiers: .command)

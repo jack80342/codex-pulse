@@ -185,6 +185,102 @@ struct AutomaticRequestTests {
     }
 
     @Test
+    func manualRetryIsPersistedBeforeRequestAndOnlyAllowedOnceUntilReset() throws {
+        let root = root()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = AccountStore(root: root)
+        try store.add(name: "A", id: "a")
+        try quota(store, ["reset": 1_900_000_120])
+        _ = try service(store, at: date, mode: "turn-timeout").process(id: "a", expectedIdentity: identity())
+        _ = try service(store, at: date).process(id: "a", expectedIdentity: identity())
+        #expect(try attempts(root) == 1)
+        _ = try service(store, at: date, mode: "turn-timeout").process(
+            id: "a", expectedIdentity: identity(), allowManualRetry: true)
+        #expect(try attempts(root) == 2)
+        let file = root.appendingPathComponent("scheduling/a.json")
+        var saved = try #require(JSONSerialization.jsonObject(with: Data(contentsOf: file)) as? [String: Any])
+        #expect(saved["manualRetryUsed"] as? Bool == true)
+        // 模拟补试发出后崩溃，重启后 pending 同样不得再补。
+        saved["outcome"] = "pending"
+        try JSONSerialization.data(withJSONObject: saved).write(to: file)
+        let blocked = try service(store, at: date).process(id: "a", expectedIdentity: identity(), allowManualRetry: true)
+        #expect(blocked.message == PulseLocalization.text("automatic.manualRetryUsed"))
+        #expect(try attempts(root) == 2)
+        let next = date.addingTimeInterval(130)
+        try quota(store, ["reset": 1_900_000_250])
+        _ = try service(store, at: next, mode: "turn-timeout").process(id: "a", expectedIdentity: identity())
+        _ = try service(store, at: next).process(id: "a", expectedIdentity: identity(), allowManualRetry: true)
+        #expect(try attempts(root) == 4)
+        _ = try service(store, at: next).process(id: "a", expectedIdentity: identity(), allowManualRetry: true)
+        #expect(try attempts(root) == 4)
+    }
+
+    @Test
+    func manualBatchRetriesPrimaryIdentityOnlyOnce() async throws {
+        let root = root()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = AccountStore(root: root)
+        let a = try store.add(name: "A", id: "a")
+        let b = try store.add(name: "Duplicate", id: "b")
+        try quota(store, ["reset": 1_900_000_120])
+        _ = try service(store, at: date, mode: "turn-timeout").process(id: "a", expectedIdentity: identity())
+        let snapshot = try QuotaSnapshot.decode(Data("{\"accountId\":\"fixture-a\",\"rateLimitsByLimitId\":{}}".utf8))
+        let statuses = [a, b].map { AccountStatus(account: $0, state: "loggedIn", snapshot: snapshot, error: nil) }
+        let service = try service(store, at: date)
+        _ = await service.run(statuses: statuses, allowManualRetry: true)
+        _ = await service.run(statuses: statuses, allowManualRetry: true)
+        #expect(try attempts(root, id: "a") == 2)
+        #expect(try attempts(root, id: "b") == 0)
+    }
+
+    @Test
+    func successfulRetryAndSuccessfulOriginalAreNotRetried() throws {
+        let root = root()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = AccountStore(root: root)
+        try store.add(name: "A", id: "a")
+        try quota(store, ["reset": 1_900_000_120])
+        _ = try service(store, at: date, mode: "turn-timeout").process(id: "a", expectedIdentity: identity())
+        let retry = try service(store, at: date).process(id: "a", expectedIdentity: identity(), allowManualRetry: true)
+        #expect(retry.message == PulseLocalization.text("automatic.completed"))
+        for _ in 0..<3 {
+            _ = try service(store, at: date).process(id: "a", expectedIdentity: identity(), allowManualRetry: true)
+        }
+        #expect(try attempts(root) == 2)
+        try store.add(name: "B", id: "b")
+        try quota(store, id: "b", ["reset": 1_900_000_120])
+        for _ in 0..<2 {
+            _ = try service(store, at: date).process(id: "b", expectedIdentity: identity("b"), allowManualRetry: true)
+        }
+        #expect(try attempts(root, id: "b") == 1)
+    }
+
+    @Test
+    func legacyCrashCanRetryOnlyAfterKnownResetAndQuotaValidation() throws {
+        let root = root()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = AccountStore(root: root)
+        let account = try store.add(name: "A", id: "a")
+        try quota(store, ["reset": 1_900_000_120])
+        let directory = root.appendingPathComponent("scheduling")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
+        let file = directory.appendingPathComponent("a.json")
+        try JSONSerialization.data(withJSONObject: ["schemaVersion": 1,
+            "createdAt": account.createdAt.timeIntervalSinceReferenceDate,
+            "identityDigest": identity(), "attemptedAt": date.timeIntervalSinceReferenceDate,
+            "outcome": "pending"]).write(to: file)
+        for values: [String: Any] in [["reset": NSNull()], ["reset": 1_900_000_120, "weekly": 100],
+                                      ["reset": 1_900_000_120, "five": 100]] {
+            try quota(store, values)
+            _ = try service(store, at: date).process(id: "a", expectedIdentity: identity(), allowManualRetry: true)
+            #expect(try attempts(root) == 0)
+        }
+        try quota(store, ["reset": 1_900_000_120])
+        _ = try service(store, at: date).process(id: "a", expectedIdentity: identity(), allowManualRetry: true)
+        #expect(try attempts(root) == 1)
+    }
+
+    @Test
     func corruptCheckpointFailsClosedAndIsPreserved() throws {
         let root = root()
         defer { try? FileManager.default.removeItem(at: root) }

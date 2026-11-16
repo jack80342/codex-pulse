@@ -50,6 +50,7 @@ public final class MenuBarModel: ObservableObject {
     private let readAccounts: @Sendable () async throws -> [ManagedAccount]
     private let readStatuses: @Sendable () async throws -> [AccountStatus]
     private let runAutomatic: (@Sendable ([AccountStatus]) async throws -> [AutomaticRequestResult])?
+    private let runManualAutomatic: (@Sendable ([AccountStatus]) async throws -> [AutomaticRequestResult])?
     private let now: @Sendable () -> Date
     private let timersEnabled: Bool
 
@@ -57,11 +58,13 @@ public final class MenuBarModel: ObservableObject {
         readAccounts: @escaping @Sendable () async throws -> [ManagedAccount],
         readStatuses: @escaping @Sendable () async throws -> [AccountStatus],
         runAutomatic: (@Sendable ([AccountStatus]) async throws -> [AutomaticRequestResult])? = nil,
-        now: @escaping @Sendable () -> Date = { Date() }, timersEnabled: Bool = false
+        now: @escaping @Sendable () -> Date = { Date() }, timersEnabled: Bool = false,
+        runManualAutomatic: (@Sendable ([AccountStatus]) async throws -> [AutomaticRequestResult])? = nil
     ) {
         self.readAccounts = readAccounts
         self.readStatuses = readStatuses
         self.runAutomatic = runAutomatic
+        self.runManualAutomatic = runManualAutomatic
         self.now = now
         self.timersEnabled = timersEnabled
     }
@@ -81,7 +84,13 @@ public final class MenuBarModel: ObservableObject {
                 let executable = try CodexExecutable.resolve()
                 return await AutomaticRequestService(store: store, executable: executable).run(statuses: statuses)
             }.value
-        }, timersEnabled: true)
+        }, timersEnabled: true, runManualAutomatic: { statuses in
+            try await Task.detached(priority: .utility) {
+                let executable = try CodexExecutable.resolve()
+                return await AutomaticRequestService(store: store, executable: executable)
+                    .run(statuses: statuses, allowManualRetry: true)
+            }.value
+        })
     }
 
     public func startIfNeeded() async {
@@ -90,7 +99,7 @@ public final class MenuBarModel: ObservableObject {
         await refresh()
     }
 
-    public func refresh() async {
+    public func refresh(allowManualRetry: Bool = false) async {
         guard !isRefreshing, !isSleeping, !isManagingAccounts else { return }
         started = true
         isRefreshing = true
@@ -142,9 +151,10 @@ public final class MenuBarModel: ObservableObject {
                 }
                 return row
             }
-            if let runAutomatic, !isSleeping {
+            let operation = allowManualRetry ? (runManualAutomatic ?? runAutomatic) : runAutomatic
+            if let operation, !isSleeping {
                 isRunningAutomatic = true
-                let results = try await runAutomatic(statuses)
+                let results = try await operation(statuses)
                 automaticResults = Dictionary(uniqueKeysWithValues: results.map { ($0.accountID, $0) })
                 for index in rows.indices {
                     guard let snapshot = automaticResults[rows[index].id]?.snapshot else { continue }

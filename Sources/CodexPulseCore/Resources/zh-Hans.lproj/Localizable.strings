@@ -131,3 +131,5 @@
 "update.error.http" = "检查更新失败（HTTP %ld），请稍后重试。";
 
 "account.reorder" = "拖动调整账号顺序";
+
+"automatic.manualRetryUsed" = "本窗口已补试一次，等待重置";
